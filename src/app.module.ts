@@ -10,6 +10,7 @@ import { TagModule } from './tag/tag.module';
 import { RepositoryModule } from './repository/repository.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { ReviewModule } from './review/review.module';
+import { AuthModule } from './auth/auth.module';
 import { SearchModule } from './search/search.module';
 
 @Module({
@@ -23,6 +24,7 @@ import { SearchModule } from './search/search.module';
     RepositoryModule,
     WebhookModule,
     ReviewModule,
+    AuthModule,
     SearchModule,
   ],
   controllers: [AppController],

@@ -13,6 +13,7 @@ import {
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // NOTE: You will need to implement an authentication guard
 // For now, we will assume a user is attached to the request.
 // import { AuthGuard } from '@nestjs/passport';
@@ -22,24 +23,27 @@ export class ProjectController {
   constructor(private readonly projectService: ProjectService) {}
 
   @Get()
-  // @UseGuards(AuthGuard('jwt'))
+  @UseGuards(JwtAuthGuard)
   async getProjects(@Request() req) {
-    // const userId = req.user.id;
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-    return this.projectService.getProjectsForUser(mockUserId);
+    console.log('GET /api/projects received');
+    const userId = req.user.userId;
+    console.log('Authenticated userId for getProjects:', userId);
+    const projects = await this.projectService.getProjectsForUser(userId);
+    console.log('Returning projects for user:', projects);
+    return projects;
   }
 
   @Post()
-  // @UseGuards(AuthGuard('jwt')) // Example of protecting the endpoint
+  @UseGuards(JwtAuthGuard)
   async createProject(
     @Body(new ValidationPipe()) createProjectDto: CreateProjectDto,
     @Request() req,
   ) {
-    // In a real app, the user ID would come from the authenticated request, e.g., req.user.id
-    // For this MVP implementation, we'll simulate it or pass it in.
-    // This will need to be replaced with a real user from your auth system.
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; // Replace with actual user ID from auth
-    return this.projectService.createProject(createProjectDto, mockUserId);
+    console.log('POST /api/projects received');
+    console.log('Request body:', createProjectDto);
+    const userId = req.user.userId;
+    console.log('Authenticated userId:', userId);
+    return this.projectService.createProject(createProjectDto, userId);
   }
 
   @Post(':id/members')
@@ -55,5 +59,12 @@ export class ProjectController {
   // @UseGuards(AuthGuard('jwt'))
   async getProjectPhases(@Param('id', ParseUUIDPipe) projectId: string) {
     return this.projectService.getProjectPhases(projectId);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getProjectById(@Param('id', ParseUUIDPipe) projectId: string) {
+    console.log(`GET /api/projects/${projectId} received`);
+    return this.projectService.getProjectById(projectId);
   }
 }

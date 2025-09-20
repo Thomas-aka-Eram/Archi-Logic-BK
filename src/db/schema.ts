@@ -11,6 +11,7 @@ import {
   unique,
   customType,
 } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -611,3 +612,247 @@ export const notifications = pgTable('notifications', {
  * END OF SCHEMA
  * ===========================
  */
+
+/**
+ * ===========================
+ * RELATIONS
+ * ===========================
+ */
+
+// One user can have many projects (through userProjects)
+export const usersRelations = relations(users, ({ many }) => ({
+  userProjects: many(userProjects),
+}));
+
+// One project can have many users (through userProjects) and many phases
+export const projectsRelations = relations(projects, ({ many, one }) => ({
+  userProjects: many(userProjects),
+  phases: many(projectPhases),
+  documents: many(documents),
+  tags: many(tags),
+  tasks: many(tasks),
+  repositories: many(repositories),
+  createdBy: one(users, {
+    fields: [projects.createdBy],
+    references: [users.id],
+  }),
+}));
+
+// Junction table relations
+export const userProjectsRelations = relations(userProjects, ({ one }) => ({
+  user: one(users, {
+    fields: [userProjects.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [userProjects.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const projectPhasesRelations = relations(projectPhases, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectPhases.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [documents.projectId],
+    references: [projects.id],
+  }),
+  phase: one(projectPhases, {
+    fields: [documents.phaseId],
+    references: [projectPhases.id],
+  }),
+  domain: one(domains, {
+    fields: [documents.domainId],
+    references: [domains.id],
+  }),
+  creator: one(users, {
+    fields: [documents.createdBy],
+    references: [users.id],
+  }),
+  blocks: many(blocks),
+}));
+
+export const blocksRelations = relations(blocks, ({ one, many }) => ({
+  document: one(documents, {
+    fields: [blocks.documentId],
+    references: [documents.id],
+  }),
+  creator: one(users, {
+    fields: [blocks.createdBy],
+    references: [users.id],
+  }),
+  parentVersion: one(blocks, {
+    fields: [blocks.parentVersionId],
+    references: [blocks.id],
+    relationName: 'block_versions',
+  }),
+  childVersions: many(blocks, {
+    relationName: 'block_versions',
+  }),
+  tags: many(blockTags),
+  domains: many(blockDomains),
+  reviewRequests: many(reviewRequests),
+}));
+
+export const domainsRelations = relations(domains, ({ one }) => ({
+  project: one(projects, {
+    fields: [domains.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const blockDomainsRelations = relations(blockDomains, ({ one }) => ({
+  block: one(blocks, {
+    fields: [blockDomains.blockId],
+    references: [blocks.id],
+  }),
+  domain: one(domains, {
+    fields: [blockDomains.domainId],
+    references: [domains.id],
+  }),
+}));
+
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [tags.projectId],
+    references: [projects.id],
+  }),
+  parent: one(tags, {
+    fields: [tags.parentId],
+    references: [tags.id],
+    relationName: 'tag_hierarchy',
+  }),
+  children: many(tags, {
+    relationName: 'tag_hierarchy',
+  }),
+  ancestors: many(tagClosure, { relationName: 'tag_ancestors' }),
+  descendants: many(tagClosure, { relationName: 'tag_descendants' }),
+}));
+
+export const tagClosureRelations = relations(tagClosure, ({ one }) => ({
+  ancestor: one(tags, {
+    fields: [tagClosure.ancestorId],
+    references: [tags.id],
+    relationName: 'tag_ancestors',
+  }),
+  descendant: one(tags, {
+    fields: [tagClosure.descendantId],
+    references: [tags.id],
+    relationName: 'tag_descendants',
+  }),
+}));
+
+export const blockTagsRelations = relations(blockTags, ({ one }) => ({
+  block: one(blocks, {
+    fields: [blockTags.blockId],
+    references: [blocks.id],
+  }),
+  tag: one(tags, {
+    fields: [blockTags.tagId],
+    references: [tags.id],
+  }),
+}));
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [tasks.projectId],
+    references: [projects.id],
+  }),
+  assignees: many(userTasks),
+  dependencies: many(taskDependencies, { relationName: 'task_dependencies' }),
+  dependents: many(taskDependencies, { relationName: 'task_dependents' }),
+  tags: many(taskTags),
+  commits: many(taskCommits),
+}));
+
+export const userTasksRelations = relations(userTasks, ({ one }) => ({
+  user: one(users, {
+    fields: [userTasks.userId],
+    references: [users.id],
+  }),
+  task: one(tasks, {
+    fields: [userTasks.taskId],
+    references: [tasks.id],
+  }),
+}));
+
+export const taskDependenciesRelations = relations(
+  taskDependencies,
+  ({ one }) => ({
+    task: one(tasks, {
+      fields: [taskDependencies.taskId],
+      references: [tasks.id],
+      relationName: 'task_dependents',
+    }),
+    dependsOn: one(tasks, {
+      fields: [taskDependencies.dependsOnTaskId],
+      references: [tasks.id],
+      relationName: 'task_dependencies',
+    }),
+  }),
+);
+
+export const taskTagsRelations = relations(taskTags, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskTags.taskId],
+    references: [tasks.id],
+  }),
+  tag: one(tags, {
+    fields: [taskTags.tagId],
+    references: [tags.id],
+  }),
+}));
+
+export const repositoriesRelations = relations(repositories, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [repositories.projectId],
+    references: [projects.id],
+  }),
+  commits: many(commits),
+}));
+
+export const commitsRelations = relations(commits, ({ one, many }) => ({
+  repository: one(repositories, {
+    fields: [commits.repoId],
+    references: [repositories.id],
+  }),
+  project: one(projects, {
+    fields: [commits.projectId],
+    references: [projects.id],
+  }),
+  tasks: many(taskCommits),
+}));
+
+export const taskCommitsRelations = relations(taskCommits, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskCommits.taskId],
+    references: [tasks.id],
+  }),
+  commit: one(commits, {
+    fields: [taskCommits.commitId],
+    references: [commits.id],
+  }),
+}));
+
+export const reviewRequestsRelations = relations(reviewRequests, ({ one }) => ({
+  block: one(blocks, {
+    fields: [reviewRequests.blockId],
+    references: [blocks.id],
+  }),
+  requester: one(users, {
+    fields: [reviewRequests.requesterId],
+    references: [users.id],
+    relationName: 'review_requester',
+  }),
+  reviewer: one(users, {
+    fields: [reviewRequests.reviewerId],
+    references: [users.id],
+    relationName: 'review_reviewer',
+  }),
+}));
+

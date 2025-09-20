@@ -31,7 +31,9 @@ export class TaskController {
   }
 
   @Get('/project/:projectId')
-  async getTasksForProject(@Param('projectId', ParseUUIDPipe) projectId: string) {
+  async getTasksForProject(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
     return this.taskService.getTasksForProject(projectId);
   }
 

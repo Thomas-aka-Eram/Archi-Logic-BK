@@ -37,7 +37,9 @@ export class UserService {
     this.logger.log('Password hashed successfully.');
 
     // Create the new user
-    this.logger.log(`Inserting new user ${name} (${email}) into the database...`);
+    this.logger.log(
+      `Inserting new user ${name} (${email}) into the database...`,
+    );
     const newUser = await this.db
       .insert(schema.users)
       .values({
@@ -51,10 +53,28 @@ export class UserService {
         name: schema.users.name,
         createdAt: schema.users.createdAt,
       });
-    
+
     console.log('Response from database after insertion:', newUser[0]);
-    this.logger.log(`User ${newUser[0].name} created successfully with ID: ${newUser[0].id}`);
+    this.logger.log(
+      `User ${newUser[0].name} created successfully with ID: ${newUser[0].id}`,
+    );
 
     return newUser[0];
+  }
+
+  async findOne(email: string) {
+    this.logger.log(`Searching for user with email: ${email}`);
+    const user = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+
+    if (user.length > 0) {
+      this.logger.log(`User with email ${email} found.`);
+      return user[0];
+    }
+
+    this.logger.log(`User with email ${email} not found.`);
+    return undefined;
   }
 }

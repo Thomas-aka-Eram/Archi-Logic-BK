@@ -21,51 +21,62 @@ export class ProjectService {
   constructor(@Inject(DB) private readonly db: DbType) {}
 
   async createProject(createProjectDto: CreateProjectDto, userId: string) {
+    console.log(
+      'ProjectService.createProject called with:',
+      createProjectDto,
+      'and userId:',
+      userId,
+    );
     const { name, description, phases } = createProjectDto;
     const phasesToCreate =
       phases && phases.length > 0 ? phases : DEFAULT_PHASES;
+    console.log('Phases to create:', phasesToCreate);
 
-    const newProject = await this.db.transaction(async (tx) => {
-      // 1. Create the project
-      const [createdProject] = await tx
-        .insert(projects)
-        .values({
-          name,
-          description,
-          createdBy: userId,
-        })
-        .returning();
+    // 1. Create the project
+    console.log('Inserting new project into database...');
+    const [createdProject] = await this.db
+      .insert(projects)
+      .values({
+        name,
+        description,
+        createdBy: userId,
+      })
+      .returning();
+    console.log('Project created successfully:', createdProject);
 
-      // 2. Assign the creator as the 'Owner'
-      await tx.insert(userProjects).values({
-        userId,
-        projectId: createdProject.id,
-        role: 'Owner',
-        permissions: ['ADMIN'], // Assuming 'ADMIN' is a super-permission
-      });
-
-      // 3. Create the project phases
-      const phaseValues = phasesToCreate.map((phase) => ({
-        projectId: createdProject.id,
-        key: phase.key,
-        title: phase.title,
-        sortOrder: phase.sortOrder,
-      }));
-
-      await tx.insert(projectPhases).values(phaseValues);
-
-      return createdProject;
+    // 2. Assign the creator as the 'Owner'
+    console.log('Assigning creator as project owner...');
+    await this.db.insert(userProjects).values({
+      userId,
+      projectId: createdProject.id,
+      role: 'Owner',
+      permissions: ['ADMIN'], // Assuming 'ADMIN' is a super-permission
     });
+    console.log('Project owner assigned.');
+
+    // 3. Create the project phases
+    const phaseValues = phasesToCreate.map((phase) => ({
+      projectId: createdProject.id,
+      key: phase.key,
+      title: phase.title,
+      sortOrder: phase.sortOrder,
+    }));
+    console.log('Inserting project phases:', phaseValues);
+
+    await this.db.insert(projectPhases).values(phaseValues);
+    console.log('Project phases inserted.');
 
     // We can query the full project with phases to return it
+    console.log('Querying for the full project data to return...');
     const result = await this.db.query.projects.findFirst({
-      where: eq(projects.id, newProject.id),
+      where: eq(projects.id, createdProject.id),
       with: {
         phases: {
           orderBy: (phase, { asc }) => [asc(phase.sortOrder)],
         },
       },
     });
+    console.log('Returning final project data:', result);
 
     return result;
   }
@@ -105,15 +116,19 @@ export class ProjectService {
   }
 
   async getProjectsForUser(userId: string) {
+    console.log('ProjectService.getProjectsForUser called for userId:', userId);
     const projectsForUser = await this.db.query.userProjects.findMany({
       where: eq(userProjects.userId, userId),
       with: {
         project: true,
       },
     });
+    console.log('Found userProjects entries:', projectsForUser);
     // This returns an array of userProject objects, each containing the project details.
     // We'll map it to return just the project objects.
-    return projectsForUser.map((up) => up.project);
+    const projects = projectsForUser.map((up) => up.project);
+    console.log('Mapped projects to return:', projects);
+    return projects;
   }
 
   async getProjectPhases(projectId: string) {
@@ -133,5 +148,35 @@ export class ProjectService {
     }
 
     return phases;
+  }
+
+  async getProjectById(projectId: string) {
+    console.log('ProjectService.getProjectById called for projectId:', projectId);
+    const project = await this.db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      with: {
+        phases: {
+          orderBy: (phase, { asc }) => [asc(phase.sortOrder)],
+        },
+        userProjects: {
+          with: {
+            user: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    console.log('Found project:', project);
+    return project;
   }
 }
