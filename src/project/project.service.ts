@@ -1,11 +1,22 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import type { DbType } from '../db/drizzle.module';
 import { DB } from '../db/drizzle.module';
 import * as schema from '../db/schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
-import { users, projects, userProjects, projectPhases } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import {
+  users,
+  projects,
+  userProjects,
+  projectPhases,
+  activityLogs,
+} from '../db/schema';
+import { eq, and } from 'drizzle-orm';
 
 const DEFAULT_PHASES = [
   { key: 'REQUIREMENTS', title: 'Requirements', sortOrder: 1 },
@@ -148,6 +159,85 @@ export class ProjectService {
     }
 
     return phases;
+  }
+
+  async updateMemberRole(
+    requestingUserId: string,
+    projectId: string,
+    targetUserId: string,
+    newRole: string,
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [requesterMembership] = await tx
+        .select()
+        .from(userProjects)
+        .where(
+          and(
+            eq(userProjects.userId, requestingUserId),
+            eq(userProjects.projectId, projectId),
+          ),
+        );
+
+      if (
+        !requesterMembership ||
+        !requesterMembership.role ||
+        !['Owner', 'Manager'].includes(requesterMembership.role)
+      ) {
+        throw new ForbiddenException(
+          'You do not have permission to manage member roles for this project.',
+        );
+      }
+
+      const [targetMembership] = await tx
+        .select()
+        .from(userProjects)
+        .where(
+          and(
+            eq(userProjects.userId, targetUserId),
+            eq(userProjects.projectId, projectId),
+          ),
+        );
+
+      if (!targetMembership) {
+        throw new NotFoundException('Member not found in this project.');
+      }
+
+      // Add any additional business logic here, e.g., cannot demote the owner.
+
+      const [updatedMembership] = await tx
+        .update(userProjects)
+        .set({ role: newRole })
+        .where(eq(userProjects.id, targetMembership.id))
+        .returning();
+
+      await tx.insert(activityLogs).values({
+        userId: requestingUserId,
+        projectId,
+        action: 'MEMBER_ROLE_UPDATED',
+        entity: 'UserProject',
+        entityId: targetMembership.id,
+        oldValues: { role: targetMembership.role },
+        newValues: { role: newRole },
+      });
+
+      return updatedMembership;
+    });
+  }
+
+  async getProjectMembers(projectId: string) {
+    const members = await this.db.query.userProjects.findMany({
+      where: eq(userProjects.projectId, projectId),
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+    return members;
   }
 
   async getProjectById(projectId: string) {

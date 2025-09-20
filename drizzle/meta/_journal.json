@@ -22,6 +22,13 @@
       "when": 1757756978171,
       "tag": "0002_low_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1758373891552,
+      "tag": "0003_small_sharon_carter",
+      "breakpoints": true
     }
   ]
 }

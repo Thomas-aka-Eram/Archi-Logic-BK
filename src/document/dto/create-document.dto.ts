@@ -4,8 +4,8 @@ export class CreateDocumentDto {
   @IsString()
   title: string;
 
-  @IsUUID()
-  phaseId: string;
+  @IsString()
+  phaseKey: string;
 
   @IsUUID()
   @IsOptional()

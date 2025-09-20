@@ -12,6 +12,7 @@ import { WebhookModule } from './webhook/webhook.module';
 import { ReviewModule } from './review/review.module';
 import { AuthModule } from './auth/auth.module';
 import { SearchModule } from './search/search.module';
+import { InvitationModule } from './invitation/invitation.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SearchModule } from './search/search.module';
     ReviewModule,
     AuthModule,
     SearchModule,
+    InvitationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

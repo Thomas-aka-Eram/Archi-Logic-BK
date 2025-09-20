@@ -21,13 +21,25 @@ export class DocumentService {
     createDocumentDto: CreateDocumentDto,
     userId: string,
   ) {
-    const { title, phaseId, domainId } = createDocumentDto;
+    const { title, phaseKey, domainId } = createDocumentDto;
+
+    const phase = await this.db.query.projectPhases.findFirst({
+      where: and(
+        eq(schema.projectPhases.projectId, projectId),
+        eq(schema.projectPhases.key, phaseKey),
+      ),
+    });
+
+    if (!phase) {
+      throw new NotFoundException(`Phase with key "${phaseKey}" not found in this project.`);
+    }
+
     const [newDocument] = await this.db
       .insert(schema.documents)
       .values({
         projectId,
         title,
-        phaseId,
+        phaseId: phase.id,
         domainId,
         createdBy: userId,
       })
@@ -36,10 +48,24 @@ export class DocumentService {
   }
 
   async getDocumentsForProject(projectId: string, phaseKey?: string) {
+    let phaseId: string | undefined;
+    if (phaseKey) {
+      const phase = await this.db.query.projectPhases.findFirst({
+        where: and(
+          eq(schema.projectPhases.projectId, projectId),
+          eq(schema.projectPhases.key, phaseKey),
+        ),
+      });
+      if (!phase) {
+        return [];
+      }
+      phaseId = phase.id;
+    }
+
     const documents = await this.db.query.documents.findMany({
       where: and(
         eq(schema.documents.projectId, projectId),
-        phaseKey ? eq(schema.documents.phaseId, phaseKey) : undefined, // Assuming phaseId is the key
+        phaseId ? eq(schema.documents.phaseId, phaseId) : undefined,
       ),
       orderBy: (doc, { desc }) => [desc(doc.createdAt)],
     });

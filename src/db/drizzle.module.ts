@@ -1,18 +1,12 @@
 import { Module } from '@nestjs/common';
-import {
-  drizzle,
-  NeonHttpDatabase,
-  NeonHttpQueryResultHKT,
-} from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
+import { drizzle, NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
-import { PgTransaction } from 'drizzle-orm/pg-core';
 import { ExtractTablesWithRelations } from 'drizzle-orm';
 
 export const DB = 'DB';
-export type DbType = NeonHttpDatabase<typeof schema>;
-export type TransactionType = PgTransaction<
-  NeonHttpQueryResultHKT,
+export type DbType = NodePgDatabase<typeof schema>;
+export type TransactionType = NodePgTransaction<
   typeof schema,
   ExtractTablesWithRelations<typeof schema>
 >;
@@ -22,8 +16,11 @@ export type TransactionType = PgTransaction<
     {
       provide: DB,
       useFactory: () => {
-        const sql = neon(process.env.DATABASE_URL!);
-        return drizzle(sql, { schema });
+        const pool = new Pool({
+          connectionString: process.env.DATABASE_URL,
+          ssl: true,
+        });
+        return drizzle(pool, { schema });
       },
     },
   ],

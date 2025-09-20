@@ -474,6 +474,42 @@ export const taskCommits = pgTable(
  * ===========================
  */
 
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    codeHash: text('code_hash').notNull(),
+    createdBy: uuid('created_by')
+      .references(() => users.id)
+      .notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(),
+    status: varchar('status', {
+      length: 20,
+      enum: ['active', 'used', 'expired', 'revoked'],
+    })
+      .default('active')
+      .notNull(),
+    usedBy: uuid('used_by').references(() => users.id),
+    usedAt: timestamp('used_at'),
+    maxUses: integer('max_uses').default(1),
+    roleOnJoin: varchar('role_on_join', { length: 50 }).default('Developer'),
+    note: text('note'),
+  },
+  (t) => ({
+    projectStatusIdx: index('invitations_project_status_idx').on(
+      t.projectId,
+      t.status,
+    ),
+    expiresAtIdx: index('invitations_expires_at_idx').on(t.expiresAt),
+    // Optional: unique constraint on active codes
+    // uniqueActiveCode: unique('unique_active_invitation_code').on(t.codeHash).where(eq(t.status, 'active')),
+  }),
+);
+
 // activity_logs: audit trail (consider partitioning in production)
 export const activityLogs = pgTable(
   'activity_logs',
@@ -853,6 +889,23 @@ export const reviewRequestsRelations = relations(reviewRequests, ({ one }) => ({
     fields: [reviewRequests.reviewerId],
     references: [users.id],
     relationName: 'review_reviewer',
+  }),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  project: one(projects, {
+    fields: [invitations.projectId],
+    references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [invitations.createdBy],
+    references: [users.id],
+    relationName: 'invitation_creator',
+  }),
+  usedByUser: one(users, {
+    fields: [invitations.usedBy],
+    references: [users.id],
+    relationName: 'invitation_user',
   }),
 }));
 

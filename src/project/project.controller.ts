@@ -9,10 +9,12 @@ import {
   UseGuards,
   Request,
   ParseUUIDPipe,
+  Patch,
 } from '@nestjs/common';
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // NOTE: You will need to implement an authentication guard
 // For now, we will assume a user is attached to the request.
@@ -46,6 +48,12 @@ export class ProjectController {
     return this.projectService.createProject(createProjectDto, userId);
   }
 
+  @Get(':id/members')
+  @UseGuards(JwtAuthGuard)
+  async getProjectMembers(@Param('id', ParseUUIDPipe) projectId: string) {
+    return this.projectService.getProjectMembers(projectId);
+  }
+
   @Post(':id/members')
   // @UseGuards(AuthGuard('jwt'))
   async addProjectMember(
@@ -53,6 +61,22 @@ export class ProjectController {
     @Body(new ValidationPipe()) addProjectMemberDto: AddProjectMemberDto,
   ) {
     return this.projectService.addProjectMember(projectId, addProjectMemberDto);
+  }
+
+  @Patch(':projectId/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  async updateMemberRole(
+    @Request() req,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
+    @Body(new ValidationPipe()) updateMemberRoleDto: UpdateMemberRoleDto,
+  ) {
+    return this.projectService.updateMemberRole(
+      req.user.userId,
+      projectId,
+      targetUserId,
+      updateMemberRoleDto.role,
+    );
   }
 
   @Get(':id/phases')
