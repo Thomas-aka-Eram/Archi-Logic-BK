@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:delete": "dotenv -- psql $DATABASE_URL -c \"DROP SCHEMA public CASCADE; CREATE SCHEMA public;\" && npm run db:push"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
@@ -54,6 +55,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/supertest": "^6.0.2",
+    "dotenv-cli": "^10.0.0",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",

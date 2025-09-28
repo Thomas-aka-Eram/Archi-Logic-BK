@@ -10,6 +10,7 @@ import {
   Request,
   ParseUUIDPipe,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -20,9 +21,39 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // For now, we will assume a user is attached to the request.
 // import { AuthGuard } from '@nestjs/passport';
 
+import { DocumentService } from '../document/document.service';
+import { CreateDocumentDto } from '../document/dto/create-document.dto';
+
 @Controller('projects')
 export class ProjectController {
-  constructor(private readonly projectService: ProjectService) {}
+  constructor(
+    private readonly projectService: ProjectService,
+    private readonly documentService: DocumentService,
+  ) {}
+
+  @Post(':projectId/documents')
+  @UseGuards(JwtAuthGuard)
+  async createDocument(
+    @Request() req,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body(new ValidationPipe()) createDocumentDto: CreateDocumentDto,
+  ) {
+    console.log('createDocument called');
+    return this.documentService.createDocument(
+      projectId,
+      createDocumentDto,
+      req.user.userId,
+    );
+  }
+
+  @Get(':projectId/documents')
+  @UseGuards(JwtAuthGuard)
+  async getDocumentsForProject(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('phase') phaseKey?: string,
+  ) {
+    return this.documentService.getDocumentsForProject(projectId, phaseKey);
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard)

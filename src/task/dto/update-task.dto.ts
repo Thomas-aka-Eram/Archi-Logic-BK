@@ -4,7 +4,19 @@ import {
   IsInt,
   IsDateString,
   IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  IsUUID,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class AssignmentDto {
+  @IsUUID()
+  userId: string;
+
+  @IsString()
+  role: string;
+}
 
 export class UpdateTaskDto {
   @IsString()
@@ -31,4 +43,10 @@ export class UpdateTaskDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AssignmentDto)
+  @IsOptional()
+  assignees?: AssignmentDto[];
 }

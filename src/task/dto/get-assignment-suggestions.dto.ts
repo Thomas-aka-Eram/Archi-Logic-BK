@@ -1,8 +1,11 @@
-import { IsArray, IsUUID, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, IsOptional } from 'class-validator';
 
 export class GetAssignmentSuggestionsDto {
-  @IsArray()
-  @IsUUID('all', { each: true })
+  @IsString()
   @IsNotEmpty()
+  projectId: string;
+
+  @IsArray()
+  @IsOptional()
   tagIds: string[];
 }

@@ -13,6 +13,7 @@ import { ReviewModule } from './review/review.module';
 import { AuthModule } from './auth/auth.module';
 import { SearchModule } from './search/search.module';
 import { InvitationModule } from './invitation/invitation.module';
+import { DomainModule } from './domain/domain.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { InvitationModule } from './invitation/invitation.module';
     AuthModule,
     SearchModule,
     InvitationModule,
+    DomainModule,
   ],
   controllers: [AppController],
   providers: [AppService],

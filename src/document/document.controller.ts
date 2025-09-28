@@ -8,37 +8,41 @@ import {
   Query,
   ValidationPipe,
   Request,
+  UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { DocumentService } from './document.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { AddBlockDto } from './dto/add-block.dto';
 import { UpdateBlockDto } from './dto/update-block.dto';
+import { AssignTagsDto } from './dto/assign-tags.dto';
+import { AssignDomainDto } from './dto/assign-domain.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @Controller('documents')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
-  // This endpoint should be nested under projects in a real API, e.g., /projects/:projectId/documents
-  @Post('/project/:projectId')
-  async createDocument(
-    @Param('projectId') projectId: string,
-    @Body(new ValidationPipe()) createDocumentDto: CreateDocumentDto,
-    @Request() req,
+  @Patch(':docId')
+  @UseGuards(JwtAuthGuard)
+  async updateDocument(
+    @Param('docId') docId: string,
+    @Body(new ValidationPipe()) updateDocumentDto: UpdateDocumentDto,
   ) {
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; // Replace with actual user ID from auth
-    return this.documentService.createDocument(
-      projectId,
-      createDocumentDto,
-      mockUserId,
-    );
+    return this.documentService.updateDocument(docId, updateDocumentDto);
   }
 
-  @Get('/project/:projectId')
-  async getDocumentsForProject(
-    @Param('projectId') projectId: string,
-    @Query('phase') phaseKey?: string,
-  ) {
-    return this.documentService.getDocumentsForProject(projectId, phaseKey);
+  @Get(':docId')
+  async getDocument(@Param('docId') docId: string) {
+    return this.documentService.getDocument(docId);
+  }
+
+  @Delete(':docId')
+  @UseGuards(JwtAuthGuard)
+  async deleteDocument(@Param('docId') docId: string) {
+    return this.documentService.deleteDocument(docId);
   }
 
   @Get(':docId/blocks')
@@ -53,26 +57,50 @@ export class DocumentController {
   }
 
   @Post(':docId/blocks')
+  @UseGuards(JwtAuthGuard)
   async addBlock(
     @Param('docId') docId: string,
     @Body(new ValidationPipe()) addBlockDto: AddBlockDto,
     @Request() req,
   ) {
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; // Replace with actual user ID from auth
-    return this.documentService.addBlock(docId, addBlockDto, mockUserId);
+    return this.documentService.addBlock(docId, addBlockDto, req.user.userId);
   }
 
   @Patch('blocks/:blockGroupId')
+  @UseGuards(JwtAuthGuard)
   async updateBlock(
     @Param('blockGroupId') blockGroupId: string,
     @Body(new ValidationPipe()) updateBlockDto: UpdateBlockDto,
     @Request() req,
   ) {
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; // Replace with actual user ID from auth
     return this.documentService.updateBlock(
       blockGroupId,
       updateBlockDto,
-      mockUserId,
+      req.user.userId,
+    );
+  }
+
+  @Patch('blocks/:blockGroupId/tags')
+  @UseGuards(JwtAuthGuard)
+  async assignTagsToBlock(
+    @Param('blockGroupId') blockGroupId: string,
+    @Body(new ValidationPipe()) assignTagsDto: AssignTagsDto,
+  ) {
+    return this.documentService.assignTagsToBlock(
+      blockGroupId,
+      assignTagsDto.tagIds,
+    );
+  }
+
+  @Patch('blocks/:blockGroupId/domain')
+  @UseGuards(JwtAuthGuard)
+  async assignDomainToBlock(
+    @Param('blockGroupId') blockGroupId: string,
+    @Body(new ValidationPipe()) assignDomainDto: AssignDomainDto,
+  ) {
+    return this.documentService.assignDomainToBlock(
+      blockGroupId,
+      assignDomainDto.domainId,
     );
   }
 }

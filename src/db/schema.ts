@@ -117,6 +117,9 @@ export const domains = pgTable(
       .notNull(),
     key: varchar('key', { length: 50 }).notNull(), // e.g. FRONTEND
     title: varchar('title', { length: 120 }).notNull(),
+    createdBy: uuid('created_by')
+      .references(() => users.id)
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow(),
   },
   (t) => ({
@@ -184,6 +187,7 @@ export const blocks = pgTable(
       .references(() => users.id)
       .notNull(),
     createdAt: timestamp('created_at').defaultNow(),
+    orderIndex: integer('order_index').default(0),
   },
   (t) => ({
     // frequently query current version per document
@@ -244,9 +248,13 @@ export const tags = pgTable(
     parentId: uuid('parent_id').references((): any => tags.id),
     level: integer('level').default(1), // depth level (1..5) - enforce in app layer
     color: varchar('color', { length: 7 }), // hex for UI
+    phase: varchar('phase', { length: 50 }),
     description: text('description'),
     usageCount: integer('usage_count').default(0),
     isArchived: boolean('is_archived').default(false),
+    createdBy: uuid('created_by')
+      .references(() => users.id)
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow(),
   },
   (t) => ({
@@ -740,6 +748,10 @@ export const domainsRelations = relations(domains, ({ one }) => ({
     fields: [domains.projectId],
     references: [projects.id],
   }),
+  creator: one(users, {
+    fields: [domains.createdBy],
+    references: [users.id],
+  }),
 }));
 
 export const blockDomainsRelations = relations(blockDomains, ({ one }) => ({
@@ -757,6 +769,10 @@ export const tagsRelations = relations(tags, ({ one, many }) => ({
   project: one(projects, {
     fields: [tags.projectId],
     references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [tags.createdBy],
+    references: [users.id],
   }),
   parent: one(tags, {
     fields: [tags.parentId],

@@ -3,6 +3,7 @@ import {
   Inject,
   BadRequestException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { DbType, TransactionType } from '../db/drizzle.module';
 import { DB } from '../db/drizzle.module';
@@ -22,6 +23,7 @@ export class TaskService {
     createTaskDto: CreateTaskDto,
     userId: string,
   ) {
+    console.log("Create Task DTO in service:", createTaskDto);
     const {
       title,
       description,
@@ -71,6 +73,24 @@ export class TaskService {
 
       return await tx.query.tasks.findFirst({
         where: eq(schema.tasks.id, createdTask.id),
+        with: {
+          assignees: {
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+        },
       });
     });
   }
@@ -100,22 +120,99 @@ export class TaskService {
     });
   }
 
-  async updateTask(taskId: string, updateTaskDto: UpdateTaskDto) {
-    const { dueDate, ...rest } = updateTaskDto;
-    const [updatedTask] = await this.db
-      .update(schema.tasks)
-      .set({
-        ...rest,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.tasks.id, taskId))
-      .returning();
+  async getTaskById(taskId: string) {
+    const task = await this.db.query.tasks.findFirst({
+      where: eq(schema.tasks.id, taskId),
+      with: {
+        assignees: {
+          with: {
+            user: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        tags: {
+          with: {
+            tag: true,
+          },
+        },
+      },
+    });
 
-    if (!updatedTask) {
+    if (!task) {
       throw new NotFoundException('Task not found');
     }
-    return updatedTask;
+
+    return task;
+  }
+
+  async updateTask(taskId: string, updateTaskDto: UpdateTaskDto, userId: string) {
+    const { dueDate, assignees, ...rest } = updateTaskDto;
+
+    console.log(`Checking authorization for taskId: ${taskId}, userId: ${userId}`);
+    // Verify if the user is an assignee of the task
+    const isAssignee = await this.db.query.userTasks.findFirst({
+      where: and(
+        eq(schema.userTasks.taskId, taskId),
+        eq(schema.userTasks.userId, userId),
+      ),
+    });
+    console.log(`Is user ${userId} an assignee of task ${taskId}? ${!!isAssignee}`);
+
+    if (!isAssignee) {
+      throw new UnauthorizedException('User is not authorized to update this task.');
+    }
+
+    return this.db.transaction(async (tx) => {
+      if (Object.keys(rest).length > 0 || dueDate) {
+        const [updatedTask] = await tx
+          .update(schema.tasks)
+          .set({
+            ...rest,
+            dueDate: dueDate ? new Date(dueDate) : undefined,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.tasks.id, taskId))
+          .returning();
+
+        if (!updatedTask) {
+          throw new NotFoundException('Task not found');
+        }
+      }
+
+      if (assignees) {
+        await tx.delete(schema.userTasks).where(eq(schema.userTasks.taskId, taskId));
+        if (assignees.length > 0) {
+          await this.assignMultipleUsers(taskId, assignees, tx);
+        }
+      }
+
+      return await tx.query.tasks.findFirst({
+        where: eq(schema.tasks.id, taskId),
+        with: {
+          assignees: {
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+        },
+      });
+    });
   }
 
   async addTaskDependency(

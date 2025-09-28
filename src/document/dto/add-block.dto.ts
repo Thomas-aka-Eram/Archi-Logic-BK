@@ -16,4 +16,8 @@ export class AddBlockDto {
   @IsUUID('all', { each: true })
   @IsOptional()
   domains?: string[];
+
+  @IsString()
+  @IsOptional()
+  afterBlockGroupId?: string;
 }

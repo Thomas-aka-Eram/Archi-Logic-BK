@@ -10,11 +10,29 @@ import * as schema from '../db/schema';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { AddBlockDto } from './dto/add-block.dto';
 import { UpdateBlockDto } from './dto/update-block.dto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, desc } from 'drizzle-orm';
+
+import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @Injectable()
 export class DocumentService {
   constructor(@Inject(DB) private readonly db: DbType) {}
+
+  async updateDocument(docId: string, updateDocumentDto: UpdateDocumentDto) {
+    const { name } = updateDocumentDto;
+
+    const [updatedDocument] = await this.db
+      .update(schema.documents)
+      .set({ title: name })
+      .where(eq(schema.documents.id, docId))
+      .returning();
+
+    if (!updatedDocument) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    return updatedDocument;
+  }
 
   async createDocument(
     projectId: string,
@@ -45,6 +63,23 @@ export class DocumentService {
       })
       .returning();
     return newDocument;
+  }
+
+  async deleteDocument(docId: string) {
+    await this.db.delete(schema.documents).where(eq(schema.documents.id, docId));
+    return { message: 'Document deleted successfully' };
+  }
+
+  async getDocument(docId: string) {
+    const document = await this.db.query.documents.findFirst({
+      where: eq(schema.documents.id, docId),
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    return document;
   }
 
   async getDocumentsForProject(projectId: string, phaseKey?: string) {
@@ -78,7 +113,7 @@ export class DocumentService {
         eq(schema.blocks.documentId, documentId),
         currentOnly ? eq(schema.blocks.isCurrentVersion, true) : undefined,
       ),
-      orderBy: (block, { asc }) => [asc(block.createdAt)], // This should be improved with an explicit order field
+      orderBy: (block, { asc }) => [asc(block.orderIndex)],
       with: {
         tags: {
           with: {
@@ -98,8 +133,17 @@ export class DocumentService {
   async addBlock(documentId: string, addBlockDto: AddBlockDto, userId: string) {
     const { type, content, tags, domains } = addBlockDto;
 
-    return await this.db.transaction(async (tx) => {
-      const [newBlock] = await tx
+    const newBlock = await this.db.transaction(async (tx) => {
+      const [lastBlock] = await tx
+        .select()
+        .from(schema.blocks)
+        .where(eq(schema.blocks.documentId, documentId))
+        .orderBy(desc(schema.blocks.orderIndex))
+        .limit(1);
+
+      const newOrderIndex = (lastBlock?.orderIndex ?? -1) + 1;
+
+      const [insertedBlock] = await tx
         .insert(schema.blocks)
         .values({
           documentId,
@@ -108,19 +152,37 @@ export class DocumentService {
           createdBy: userId,
           version: 1,
           isCurrentVersion: true,
+          orderIndex: newOrderIndex,
         })
         .returning();
 
       if (tags && tags.length > 0) {
-        await this._handleBlockTags(tx, newBlock.id, tags);
+        await this._handleBlockTags(tx, insertedBlock.id, tags);
       }
 
       if (domains && domains.length > 0) {
-        await this._handleBlockDomains(tx, newBlock.id, domains);
+        await this._handleBlockDomains(tx, insertedBlock.id, domains);
       }
+
+      const newBlock = await tx.query.blocks.findFirst({
+        where: eq(schema.blocks.id, insertedBlock.id),
+        with: {
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+          domains: {
+            with: {
+              domain: true,
+            },
+          },
+        },
+      });
 
       return newBlock;
     });
+    return newBlock;
   }
 
   async updateBlock(
@@ -169,6 +231,7 @@ export class DocumentService {
           parentVersionId: currentRow.id,
           isCurrentVersion: true,
           createdBy: userId,
+          orderIndex: currentRow.orderIndex,
         })
         .returning();
 
@@ -184,7 +247,95 @@ export class DocumentService {
         await this._handleBlockDomains(tx, newVersion.id, domainsToSet);
       }
 
-      return newVersion;
+      const updatedBlock = await tx.query.blocks.findFirst({
+        where: eq(schema.blocks.id, newVersion.id),
+        with: {
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+          domains: {
+            with: {
+              domain: true,
+            },
+          },
+        },
+      });
+
+      return updatedBlock;
+    });
+
+    return updatedBlock;
+  }
+
+  async assignTagsToBlock(blockGroupId: string, tagIds: string[]) {
+    const updatedBlock = await this.db.transaction(async (tx) => {
+      const [block] = await tx
+        .select()
+        .from(schema.blocks)
+        .where(eq(schema.blocks.blockGroupId, blockGroupId));
+
+      if (!block) {
+        throw new NotFoundException('Block not found.');
+      }
+
+      await tx.delete(schema.blockTags).where(eq(schema.blockTags.blockId, block.id));
+      await this._handleBlockTags(tx, block.id, tagIds);
+
+      const updatedBlock = await tx.query.blocks.findFirst({
+        where: eq(schema.blocks.id, block.id),
+        with: {
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+          domains: {
+            with: {
+              domain: true,
+            },
+          },
+        },
+      });
+
+      return updatedBlock;
+    });
+
+    return updatedBlock;
+  }
+
+  async assignDomainToBlock(blockGroupId: string, domainId: string) {
+    const updatedBlock = await this.db.transaction(async (tx) => {
+      const [block] = await tx
+        .select()
+        .from(schema.blocks)
+        .where(eq(schema.blocks.blockGroupId, blockGroupId));
+
+      if (!block) {
+        throw new NotFoundException('Block not found.');
+      }
+
+      await tx.delete(schema.blockDomains).where(eq(schema.blockDomains.blockId, block.id));
+      await this._handleBlockDomains(tx, block.id, [domainId]);
+
+      const updatedBlock = await tx.query.blocks.findFirst({
+        where: eq(schema.blocks.id, block.id),
+        with: {
+          tags: {
+            with: {
+              tag: true,
+            },
+          },
+          domains: {
+            with: {
+              domain: true,
+            },
+          },
+        },
+      });
+
+      return updatedBlock;
     });
 
     return updatedBlock;

@@ -1,18 +1,23 @@
-import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsUUID, IsOptional, IsHexColor } from 'class-validator';
 
 export class CreateTagDto {
   @IsString()
+  @IsNotEmpty()
   name: string;
 
-  @IsString()
-  @IsOptional()
-  slug?: string;
+  @IsUUID()
+  @IsNotEmpty()
+  projectId: string;
 
   @IsUUID()
   @IsOptional()
   parentId?: string;
 
-  @IsString()
+  @IsHexColor()
   @IsOptional()
   color?: string;
+
+  @IsString()
+  @IsOptional()
+  phase?: string;
 }

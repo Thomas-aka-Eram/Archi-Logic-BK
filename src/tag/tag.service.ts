@@ -1,93 +1,94 @@
-import {
-  Injectable,
-  Inject,
-  UnauthorizedException,
-  ConflictException,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import type { DbType } from '../db/drizzle.module';
+import { Injectable, Inject, ConflictException } from '@nestjs/common';
 import { DB } from '../db/drizzle.module';
-import * as schema from '../db/schema';
+import type { DbType } from '../db/drizzle.module';
+import { tags } from '../db/schema';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { and, eq } from 'drizzle-orm';
+
+// Simple color adjustment utility (can be replaced with a more robust library)
+function adjustColor(hex: string, percent: number): string {
+  const f = parseInt(hex.slice(1), 16);
+  const t = percent < 0 ? 0 : 255;
+  const p = percent < 0 ? percent * -1 : percent;
+  const R = f >> 16;
+  const G = (f >> 8) & 0x00ff;
+  const B = f & 0x0000ff;
+  return (
+    '#' +
+    (
+      0x1000000 +
+      (Math.round((t - R) * p) + R) * 0x10000 +
+      (Math.round((t - G) * p) + G) * 0x100 +
+      (Math.round((t - B) * p) + B)
+    )
+      .toString(16)
+      .slice(1)
+  );
+}
 
 @Injectable()
 export class TagService {
   constructor(@Inject(DB) private db: DbType) {}
 
-  async createTag(
-    projectId: string,
-    createTagDto: CreateTagDto,
-    actorUserId: string,
-  ) {
-    const { name, slug, parentId, color } = createTagDto;
+  private async getParentLevel(parentId: string): Promise<number> {
+    const parent = await this.db.query.tags.findFirst({
+      where: eq(tags.id, parentId),
+      columns: { level: true },
+    });
+    return parent?.level ?? 0;
+  }
 
-    if (!name) {
-      throw new BadRequestException('Tag name is required');
+  private async getInheritedColor(parentId: string): Promise<string> {
+    const parent = await this.db.query.tags.findFirst({
+      where: eq(tags.id, parentId),
+      columns: { color: true },
+    });
+    // Adjust color to be slightly darker for children
+    return adjustColor(parent?.color ?? '#cccccc', -0.2);
+  }
+
+  async create(createTagDto: CreateTagDto, userId: string) {
+    const { name, projectId, parentId, color, phase } = createTagDto;
+    const slug = name.toLowerCase().replace(/\s+/g, '-');
+
+    const existing = await this.db.query.tags.findFirst({
+      where: and(eq(tags.projectId, projectId), eq(tags.slug, slug)),
+    });
+
+    if (existing) {
+      throw new ConflictException('A tag with this name already exists for this project.');
     }
 
-    const finalSlug = slug || name.toLowerCase().replace(/\s+/g, '-');
+    const level = parentId ? (await this.getParentLevel(parentId)) + 1 : 0;
+    const inheritedColor = parentId ? await this.getInheritedColor(parentId) : color ?? '#cccccc';
 
-    return this.db.transaction(async (tx) => {
-      // Optional: Check for MANAGE_TAGS permission
-      // const [actorMembership] = await tx.select().from(schema.userProjects)...
+    const [newTag] = await this.db
+      .insert(tags)
+      .values({
+        name,
+        slug,
+        projectId,
+        parentId,
+        color: inheritedColor,
+        level,
+        phase,
+        createdBy: userId,
+      })
+      .returning();
 
-      let parentLevel = 0;
-      if (parentId) {
-        const [parentTag] = await tx
-          .select({ level: schema.tags.level })
-          .from(schema.tags)
-          .where(eq(schema.tags.id, parentId));
+    return newTag;
+  }
 
-        if (!parentTag) {
-          throw new NotFoundException('Parent tag not found');
-        }
-        parentLevel = parentTag.level ?? 0;
-        if (parentLevel >= 5) {
-          throw new ConflictException('Tag hierarchy cannot exceed 5 levels');
-        }
+  async findAll(projectId: string) {
+    const allTags = await this.db.select().from(tags).where(eq(tags.projectId, projectId));
+    const tagMap = new Map(allTags.map(tag => [tag.id, { ...tag, children: [] as string[] }]));
+
+    for (const tag of allTags) {
+      if (tag.parentId && tagMap.has(tag.parentId)) {
+        tagMap.get(tag.parentId)!.children.push(tag.id);
       }
+    }
 
-      const [newTag] = await tx
-        .insert(schema.tags)
-        .values({
-          projectId,
-          name,
-          slug: finalSlug,
-          parentId,
-          color,
-          level: parentLevel + 1,
-        })
-        .returning();
-
-      // Handle tag closure
-      const closureValues = [
-        {
-          ancestorId: newTag.id,
-          descendantId: newTag.id,
-          depth: 0,
-        },
-      ];
-
-      if (parentId) {
-        const parentAncestors = await tx.query.tagClosure.findMany({
-          where: eq(schema.tagClosure.descendantId, parentId),
-        });
-        for (const ancestor of parentAncestors) {
-          closureValues.push({
-            ancestorId: ancestor.ancestorId,
-            descendantId: newTag.id,
-            depth: ancestor.depth + 1,
-          });
-        }
-      }
-
-      await tx.insert(schema.tagClosure).values(closureValues);
-
-      // TODO: Add activity log
-
-      return newTag;
-    });
+    return Array.from(tagMap.values());
   }
 }
