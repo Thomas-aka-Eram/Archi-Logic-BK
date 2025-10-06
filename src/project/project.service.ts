@@ -15,6 +15,8 @@ import {
   userProjects,
   projectPhases,
   activityLogs,
+  roles,
+  projectUserRoles,
 } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -55,15 +57,30 @@ export class ProjectService {
       .returning();
     console.log('Project created successfully:', createdProject);
 
-    // 2. Assign the creator as the 'Owner'
-    console.log('Assigning creator as project owner...');
-    await this.db.insert(userProjects).values({
+    // 2. Assign the creator as 'Admin' in the new project_user_roles table
+    const adminRole = await this.db.query.roles.findFirst({
+      where: eq(schema.roles.name, 'Admin'),
+    });
+    console.log('Queried adminRole:', adminRole);
+
+    if (!adminRole) {
+      throw new NotFoundException('Admin role not found. Please seed the roles table.');
+    }
+
+    await this.db.insert(schema.projectUserRoles).values({
       userId,
       projectId: createdProject.id,
-      role: 'Owner',
-      permissions: ['ADMIN'], // Assuming 'ADMIN' is a super-permission
+      roleId: adminRole.id,
     });
-    console.log('Project owner assigned.');
+
+    // Remove the old userProjects entry for the creator (if it exists, though it shouldn't for a new project)
+    // This is a cleanup step, as we are moving to projectUserRoles
+    await this.db.delete(schema.userProjects).where(
+      and(
+        eq(schema.userProjects.userId, userId),
+        eq(schema.userProjects.projectId, createdProject.id),
+      ),
+    );
 
     // 3. Create the project phases
     const phaseValues = phasesToCreate.map((phase) => ({
@@ -100,46 +117,64 @@ export class ProjectService {
 
     // Ensure the project and user exist before attempting to link them
     const projectExists = await this.db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
+      where: eq(schema.projects.id, projectId),
     });
     if (!projectExists) {
       throw new NotFoundException('Project not found');
     }
 
     const userExists = await this.db.query.users.findFirst({
-      where: eq(users.id, userId),
+      where: eq(schema.users.id, userId),
     });
     if (!userExists) {
       throw new NotFoundException('User not found');
     }
 
-    const [newUserProject] = await this.db
-      .insert(userProjects)
+    // Find the roleId for the given role name
+    const roleEntry = await this.db.query.roles.findFirst({
+      where: eq(schema.roles.name, role),
+    });
+
+    if (!roleEntry) {
+      throw new NotFoundException(`Role '${role}' not found.`);
+    }
+
+    // Insert into projectUserRoles
+    const [newProjectUserRole] = await this.db
+      .insert(schema.projectUserRoles)
       .values({
         projectId,
         userId,
-        role,
-        permissions,
+        roleId: roleEntry.id,
       })
       .returning();
 
-    return newUserProject;
+    // Remove the old userProjects entry for this user and project
+    await this.db.delete(schema.userProjects).where(
+      and(
+        eq(schema.userProjects.userId, userId),
+        eq(schema.userProjects.projectId, projectId),
+      ),
+    );
+
+    return newProjectUserRole;
   }
 
   async getProjectsForUser(userId: string) {
-    console.log('ProjectService.getProjectsForUser called for userId:', userId);
-    const projectsForUser = await this.db.query.userProjects.findMany({
-      where: eq(userProjects.userId, userId),
+    const projectMemberships = await this.db.query.projectUserRoles.findMany({
+      where: eq(schema.projectUserRoles.userId, userId),
       with: {
         project: true,
+        role: true, // Include the role details
       },
     });
-    console.log('Found userProjects entries:', projectsForUser);
-    // This returns an array of userProject objects, each containing the project details.
-    // We'll map it to return just the project objects.
-    const projects = projectsForUser.map((up) => up.project);
-    console.log('Mapped projects to return:', projects);
-    return projects;
+
+    const projectsWithRoles = projectMemberships.map((membership) => ({
+      ...membership.project,
+      userRole: membership.role.name, // Add the user's role for this project
+    }));
+
+    return projectsWithRoles;
   }
 
   async getProjectPhases(projectId: string) {
@@ -147,6 +182,8 @@ export class ProjectService {
       where: eq(projectPhases.projectId, projectId),
       orderBy: (phase, { asc }) => [asc(phase.sortOrder)],
     });
+
+    console.log('Phases returned by getProjectPhases:', phases);
 
     if (!phases || phases.length === 0) {
       // Optionally, you could check if the project exists first
@@ -165,36 +202,39 @@ export class ProjectService {
     requestingUserId: string,
     projectId: string,
     targetUserId: string,
-    newRole: string,
+    newRoleName: string,
   ) {
     return this.db.transaction(async (tx) => {
+      // Find the requesting user's role in projectUserRoles
       const [requesterMembership] = await tx
         .select()
-        .from(userProjects)
+        .from(schema.projectUserRoles)
         .where(
           and(
-            eq(userProjects.userId, requestingUserId),
-            eq(userProjects.projectId, projectId),
+            eq(schema.projectUserRoles.userId, requestingUserId),
+            eq(schema.projectUserRoles.projectId, projectId),
           ),
-        );
+        )
+        .leftJoin(schema.roles, eq(schema.projectUserRoles.roleId, schema.roles.id));
 
       if (
         !requesterMembership ||
-        !requesterMembership.role ||
-        !['Owner', 'Manager'].includes(requesterMembership.role)
+        !requesterMembership.roles ||
+        !['Admin', 'Manager'].includes(requesterMembership.roles.name)
       ) {
         throw new ForbiddenException(
           'You do not have permission to manage member roles for this project.',
         );
       }
 
+      // Find the target user's membership in projectUserRoles
       const [targetMembership] = await tx
         .select()
-        .from(userProjects)
+        .from(schema.projectUserRoles)
         .where(
           and(
-            eq(userProjects.userId, targetUserId),
-            eq(userProjects.projectId, projectId),
+            eq(schema.projectUserRoles.userId, targetUserId),
+            eq(schema.projectUserRoles.projectId, projectId),
           ),
         );
 
@@ -202,22 +242,31 @@ export class ProjectService {
         throw new NotFoundException('Member not found in this project.');
       }
 
-      // Add any additional business logic here, e.g., cannot demote the owner.
+      // Find the new role's ID
+      const newRoleEntry = await tx.query.roles.findFirst({
+        where: eq(schema.roles.name, newRoleName),
+      });
 
+      if (!newRoleEntry) {
+        throw new NotFoundException(`Role '${newRoleName}' not found.`);
+      }
+
+      // Update the role in projectUserRoles
       const [updatedMembership] = await tx
-        .update(userProjects)
-        .set({ role: newRole })
-        .where(eq(userProjects.id, targetMembership.id))
+        .update(schema.projectUserRoles)
+        .set({ roleId: newRoleEntry.id })
+        .where(eq(schema.projectUserRoles.id, targetMembership.id))
         .returning();
 
-      await tx.insert(activityLogs).values({
+      // Log activity (adjusting for new schema)
+      await tx.insert(schema.activityLogs).values({
         userId: requestingUserId,
         projectId,
         action: 'MEMBER_ROLE_UPDATED',
-        entity: 'UserProject',
+        entity: 'ProjectUserRole',
         entityId: targetMembership.id,
-        oldValues: { role: targetMembership.role },
-        newValues: { role: newRole },
+        // oldValues and newValues would need to be adjusted to store role names or IDs
+        // For now, we'll just log the action.
       });
 
       return updatedMembership;
@@ -225,8 +274,8 @@ export class ProjectService {
   }
 
   async getProjectMembers(projectId: string) {
-    const members = await this.db.query.userProjects.findMany({
-      where: eq(userProjects.projectId, projectId),
+    const members = await this.db.query.projectUserRoles.findMany({
+      where: eq(schema.projectUserRoles.projectId, projectId),
       with: {
         user: {
           columns: {
@@ -235,20 +284,24 @@ export class ProjectService {
             email: true,
           },
         },
+        role: true, // Include the role details
       },
     });
-    return members;
+    return members.map(member => ({
+      ...member.user,
+      role: member.role.name, // Add the role name to the user object
+    }));
   }
 
   async getProjectById(projectId: string) {
     console.log('ProjectService.getProjectById called for projectId:', projectId);
     const project = await this.db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
+      where: eq(schema.projects.id, projectId),
       with: {
         phases: {
           orderBy: (phase, { asc }) => [asc(phase.sortOrder)],
         },
-        userProjects: {
+        projectUserRoles: {
           with: {
             user: {
               columns: {
@@ -257,6 +310,7 @@ export class ProjectService {
                 email: true,
               },
             },
+            role: true, // Include the role details
           },
         },
       },
@@ -266,7 +320,17 @@ export class ProjectService {
       throw new NotFoundException('Project not found');
     }
 
-    console.log('Found project:', project);
-    return project;
+    // Map the projectUserRoles to include the role name directly
+    const { projectUserRoles, ...restOfProject } = project;
+    const projectWithMappedRoles = {
+      ...restOfProject,
+      members: projectUserRoles.map(pur => ({
+        ...pur.user,
+        role: pur.role.name,
+      })),
+    };
+
+    console.log('Found project:', projectWithMappedRoles);
+    return projectWithMappedRoles;
   }
 }

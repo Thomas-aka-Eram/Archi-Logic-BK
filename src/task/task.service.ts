@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { DbType, TransactionType } from '../db/drizzle.module';
 import { DB } from '../db/drizzle.module';
@@ -12,7 +13,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddTaskDependencyDto } from './dto/add-task-dependency.dto';
 import { GetAssignmentSuggestionsDto } from './dto/get-assignment-suggestions.dto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { GetUnassignedTasksDto } from './dto/get-unassigned-tasks.dto';
+import { and, eq, inArray, sql, notExists, ne, notInArray } from 'drizzle-orm';
 
 @Injectable()
 export class TaskService {
@@ -23,6 +25,27 @@ export class TaskService {
     createTaskDto: CreateTaskDto,
     userId: string,
   ) {
+    // Authorization check: Only Admin and Manager can create tasks
+    const projectMembership = await this.db.query.projectUserRoles.findFirst({
+      where: and(
+        eq(schema.projectUserRoles.userId, userId),
+        eq(schema.projectUserRoles.projectId, projectId),
+      ),
+      with: {
+        role: true,
+      },
+    });
+
+    if (
+      !projectMembership ||
+      !projectMembership.role ||
+      !['Admin', 'Manager'].includes(projectMembership.role.name)
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to create tasks in this project.',
+      );
+    }
+
     console.log("Create Task DTO in service:", createTaskDto);
     const {
       title,
@@ -32,6 +55,9 @@ export class TaskService {
       dueDate,
       assignees,
       dependencies,
+      priority,
+      domainId,
+      phaseId,
     } = createTaskDto;
 
     return await this.db.transaction(async (tx) => {
@@ -43,6 +69,9 @@ export class TaskService {
           description,
           estimateHours,
           dueDate: dueDate ? new Date(dueDate) : null,
+          priority,
+          domainId,
+          phaseId,
         })
         .returning();
 
@@ -93,6 +122,47 @@ export class TaskService {
         },
       });
     });
+  }
+
+  async getUnassignedTasks(projectId: string, filters: GetUnassignedTasksDto) {
+    const { phaseId, priority, tagIds } = filters;
+
+    const assignedTaskIds = this.db
+      .select({ id: schema.userTasks.taskId })
+      .from(schema.userTasks);
+
+    const whereClauses = [
+      eq(schema.tasks.projectId, projectId),
+      ne(schema.tasks.status, 'COMPLETED'),
+      notInArray(schema.tasks.id, assignedTaskIds),
+    ];
+
+    if (phaseId) {
+      whereClauses.push(eq(schema.tasks.phaseId, phaseId));
+    }
+    if (priority) {
+      whereClauses.push(eq(schema.tasks.priority, priority));
+    }
+    if (tagIds && tagIds.length > 0) {
+      const tasksWithTags = this.db
+        .select({ taskId: schema.taskTags.taskId })
+        .from(schema.taskTags)
+        .where(inArray(schema.taskTags.tagId, tagIds));
+      whereClauses.push(inArray(schema.tasks.id, tasksWithTags));
+    }
+
+    const unassignedTasks = await this.db.query.tasks.findMany({
+      where: and(...whereClauses),
+      with: {
+        tags: {
+          with: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: (task, { desc }) => [desc(task.createdAt)],
+    });
+    return unassignedTasks;
   }
 
   async getTasksForProject(projectId: string) {
@@ -151,40 +221,26 @@ export class TaskService {
   }
 
   async updateTask(taskId: string, updateTaskDto: UpdateTaskDto, userId: string) {
-    const { dueDate, assignees, ...rest } = updateTaskDto;
+    const { dueDate, assignees, assigneeId, ...rest } = updateTaskDto;
 
-    console.log(`Checking authorization for taskId: ${taskId}, userId: ${userId}`);
-    // Verify if the user is an assignee of the task
-    const isAssignee = await this.db.query.userTasks.findFirst({
-      where: and(
-        eq(schema.userTasks.taskId, taskId),
-        eq(schema.userTasks.userId, userId),
-      ),
-    });
-    console.log(`Is user ${userId} an assignee of task ${taskId}? ${!!isAssignee}`);
-
-    if (!isAssignee) {
-      throw new UnauthorizedException('User is not authorized to update this task.');
-    }
+    // TODO: Implement proper role-based access control for task updates
 
     return this.db.transaction(async (tx) => {
       if (Object.keys(rest).length > 0 || dueDate) {
-        const [updatedTask] = await tx
+        await tx
           .update(schema.tasks)
           .set({
             ...rest,
             dueDate: dueDate ? new Date(dueDate) : undefined,
             updatedAt: new Date(),
           })
-          .where(eq(schema.tasks.id, taskId))
-          .returning();
-
-        if (!updatedTask) {
-          throw new NotFoundException('Task not found');
-        }
+          .where(eq(schema.tasks.id, taskId));
       }
 
-      if (assignees) {
+      if (assigneeId) {
+        await tx.delete(schema.userTasks).where(eq(schema.userTasks.taskId, taskId));
+        await this.assignMultipleUsers(taskId, [{ userId: assigneeId, role: 'developer' }], tx);
+      } else if (assignees) {
         await tx.delete(schema.userTasks).where(eq(schema.userTasks.taskId, taskId));
         if (assignees.length > 0) {
           await this.assignMultipleUsers(taskId, assignees, tx);
@@ -259,23 +315,32 @@ export class TaskService {
     await tx.insert(schema.notifications).values(notificationValues);
   }
 
-  async getAssignmentSuggestions(
-    projectId: string,
-    dto: GetAssignmentSuggestionsDto,
-  ) {
-    const { tagIds } = dto;
+  async getRecommendations(taskId: string) {
+    const task = await this.getTaskById(taskId);
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
 
-    const projectMembers = await this.db.query.userProjects.findMany({
-      where: eq(schema.userProjects.projectId, projectId),
+    const tagIds = task.tags.map(t => t.tag.id);
+    const projectId = task.projectId;
+
+    const projectMembers = await this.db.query.projectUserRoles.findMany({
+      where: eq(schema.projectUserRoles.projectId, projectId),
       with: {
-        user: true,
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
     const suggestions = await Promise.all(
       projectMembers.map(async (member) => {
         const userSkills = await this.db.query.userSkills.findMany({
-          where: eq(schema.userSkills.userId, member.userId),
+          where: eq(schema.userSkills.userId, member.user.id),
         });
         const skillTagIds = userSkills.map((s) => s.tagId);
 
@@ -283,25 +348,25 @@ export class TaskService {
           tagIds.includes(skillId),
         ).length;
         const skillMatchScore =
-          tagIds.length > 0 ? matchingSkills / tagIds.length : 0;
+          tagIds.length > 0 ? (matchingSkills / tagIds.length) * 100 : 0;
 
         // In a real app, you would calculate capacity and reliability
-        const capacityScore = Math.random();
-        const reliabilityScore = Math.random();
+        const workload = Math.random() * 100;
+        const velocity = Math.random() * 100;
 
         const finalScore =
           skillMatchScore * 0.6 +
-          capacityScore * 0.25 +
-          reliabilityScore * 0.15;
+          (100 - workload) * 0.25 + // Use capacity (100 - workload)
+          velocity * 0.15;
 
         return {
-          user: member.user,
-          score: finalScore,
-          details: {
-            skillMatch: `${matchingSkills}/${tagIds.length}`,
-            availability: `${Math.round(capacityScore * 100)}%`,
-            reliability: `${Math.round(reliabilityScore * 100)}%`,
-          },
+          id: member.user.id,
+          name: member.user.name,
+          score: Math.round(finalScore),
+          skillMatch: Math.round(skillMatchScore),
+          workload: Math.round(workload),
+          velocity: Math.round(velocity),
+          reasons: ['Skill match', 'High capacity', 'Good velocity'].slice(0, 1 + Math.floor(Math.random() * 3)), // Mock reasons
         };
       }),
     );

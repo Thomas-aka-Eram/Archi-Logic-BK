@@ -33,7 +33,15 @@ export const users = pgTable('users', {
   // store hashed password (or empty when using SSO)
   passwordHash: text('password_hash'),
   role: varchar('role', { length: 50 }).default('Developer'), // global role
+  timezone: varchar('timezone', { length: 50 }).default('UTC'),
+  language: varchar('language', { length: 10 }).default('en'),
+  theme: varchar('theme', { length: 20 }).default('system'), // light, dark, system
+  emailNotifications: boolean('email_notifications').default(true),
+  taskAssignments: boolean('task_assignments').default(true),
+  reviewRequests: boolean('review_requests').default(true),
+  weeklyDigest: boolean('weekly_digest').default(true),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(), // Added
 });
 
 // Projects: core container
@@ -329,6 +337,8 @@ export const tasks = pgTable(
     priority: varchar('priority', { length: 20 }).default('MEDIUM'),
     dueDate: timestamp('due_date'),
     estimateHours: integer('estimate_hours'),
+    domainId: uuid('domain_id').references(() => domains.id),
+    phaseId: uuid('phase_id').references(() => projectPhases.id),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
     isDeleted: boolean('is_deleted').default(false),
@@ -605,6 +615,32 @@ export const notifications = pgTable('notifications', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// New roles table
+export const roles = pgTable('roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+});
+
+// New project_user_roles join table
+export const projectUserRoles = pgTable(
+  'project_user_roles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    roleId: uuid('role_id')
+      .references(() => roles.id, { onDelete: 'cascade' })
+      .notNull(),
+  },
+  (t) => ({
+    uniqueProjectUser: unique('unique_project_user').on(t.projectId, t.userId),
+  }),
+);
+
 /**
  * ===========================
  * NOTES / CAUTIONS
@@ -670,7 +706,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 // One project can have many users (through userProjects) and many phases
 export const projectsRelations = relations(projects, ({ many, one }) => ({
-  userProjects: many(userProjects),
+  projectUserRoles: many(projectUserRoles),
   phases: many(projectPhases),
   documents: many(documents),
   tags: many(tags),
@@ -922,6 +958,25 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
     fields: [invitations.usedBy],
     references: [users.id],
     relationName: 'invitation_user',
+  }),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  projectUserRoles: many(projectUserRoles),
+}));
+
+export const projectUserRolesRelations = relations(projectUserRoles, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectUserRoles.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [projectUserRoles.userId],
+    references: [users.id],
+  }),
+  role: one(roles, {
+    fields: [projectUserRoles.roleId],
+    references: [roles.id],
   }),
 }));
 

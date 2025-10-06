@@ -50,6 +50,7 @@ export class DocumentController {
     @Param('docId') docId: string,
     @Query('currentOnly') currentOnly: string = 'true',
   ) {
+    console.log('getDocumentBlocks called with docId:', docId);
     return this.documentService.getDocumentBlocks(
       docId,
       currentOnly === 'true',
@@ -63,6 +64,7 @@ export class DocumentController {
     @Body(new ValidationPipe()) addBlockDto: AddBlockDto,
     @Request() req,
   ) {
+    console.log('addBlock DTO:', JSON.stringify(addBlockDto, null, 2));
     return this.documentService.addBlock(docId, addBlockDto, req.user.userId);
   }
 
@@ -73,6 +75,7 @@ export class DocumentController {
     @Body(new ValidationPipe()) updateBlockDto: UpdateBlockDto,
     @Request() req,
   ) {
+    console.log('updateBlock DTO:', JSON.stringify(updateBlockDto, null, 2));
     return this.documentService.updateBlock(
       blockGroupId,
       updateBlockDto,

@@ -51,4 +51,16 @@ export class CreateTaskDto {
   @IsUUID('all', { each: true })
   @IsOptional()
   dependencies?: string[];
+
+  @IsString()
+  @IsOptional()
+  priority?: string;
+
+  @IsUUID()
+  @IsOptional()
+  domainId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  phaseId?: string;
 }

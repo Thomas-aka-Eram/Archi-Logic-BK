@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:delete": "dotenv -- psql $DATABASE_URL -c \"DROP SCHEMA public CASCADE; CREATE SCHEMA public;\" && npm run db:push"
+    "db:delete": "dotenv -- psql $DATABASE_URL -c \"DROP SCHEMA public CASCADE; CREATE SCHEMA public;\" && npm run db:push",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",

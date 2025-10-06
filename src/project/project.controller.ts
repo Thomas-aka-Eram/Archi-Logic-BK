@@ -74,7 +74,7 @@ export class ProjectController {
   ) {
     console.log('POST /api/projects received');
     console.log('Request body:', createProjectDto);
-    const userId = req.user.userId;
+    const userId = req.user.userId; // Use the authenticated userId
     console.log('Authenticated userId:', userId);
     return this.projectService.createProject(createProjectDto, userId);
   }

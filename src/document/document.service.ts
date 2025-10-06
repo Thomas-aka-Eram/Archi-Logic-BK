@@ -10,7 +10,7 @@ import * as schema from '../db/schema';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { AddBlockDto } from './dto/add-block.dto';
 import { UpdateBlockDto } from './dto/update-block.dto';
-import { and, eq, inArray, desc } from 'drizzle-orm';
+import { and, eq, inArray, desc, asc } from 'drizzle-orm';
 
 import { UpdateDocumentDto } from './dto/update-document.dto';
 
@@ -127,7 +127,18 @@ export class DocumentService {
         },
       },
     });
-    return blocks;
+
+    console.log('Blocks from DB with relations:', JSON.stringify(blocks, null, 2));
+
+    const result = blocks.map((block) => ({
+      ...block,
+      tags: block.tags.map((blockTag) => blockTag.tag),
+      domains: block.domains.map((blockDomain) => blockDomain.domain),
+    }));
+
+    console.log('Mapped blocks being returned:', JSON.stringify(result, null, 2));
+
+    return result;
   }
 
   async addBlock(documentId: string, addBlockDto: AddBlockDto, userId: string) {
@@ -270,11 +281,11 @@ export class DocumentService {
   }
 
   async assignTagsToBlock(blockGroupId: string, tagIds: string[]) {
-    const updatedBlock = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const [block] = await tx
         .select()
         .from(schema.blocks)
-        .where(eq(schema.blocks.blockGroupId, blockGroupId));
+        .where(and(eq(schema.blocks.blockGroupId, blockGroupId), eq(schema.blocks.isCurrentVersion, true)));
 
       if (!block) {
         throw new NotFoundException('Block not found.');
@@ -283,7 +294,7 @@ export class DocumentService {
       await tx.delete(schema.blockTags).where(eq(schema.blockTags.blockId, block.id));
       await this._handleBlockTags(tx, block.id, tagIds);
 
-      const updatedBlock = await tx.query.blocks.findFirst({
+      return tx.query.blocks.findFirst({
         where: eq(schema.blocks.id, block.id),
         with: {
           tags: {
@@ -298,19 +309,15 @@ export class DocumentService {
           },
         },
       });
-
-      return updatedBlock;
     });
-
-    return updatedBlock;
   }
 
   async assignDomainToBlock(blockGroupId: string, domainId: string) {
-    const updatedBlock = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const [block] = await tx
         .select()
         .from(schema.blocks)
-        .where(eq(schema.blocks.blockGroupId, blockGroupId));
+        .where(and(eq(schema.blocks.blockGroupId, blockGroupId), eq(schema.blocks.isCurrentVersion, true)));
 
       if (!block) {
         throw new NotFoundException('Block not found.');
@@ -319,7 +326,7 @@ export class DocumentService {
       await tx.delete(schema.blockDomains).where(eq(schema.blockDomains.blockId, block.id));
       await this._handleBlockDomains(tx, block.id, [domainId]);
 
-      const updatedBlock = await tx.query.blocks.findFirst({
+      return tx.query.blocks.findFirst({
         where: eq(schema.blocks.id, block.id),
         with: {
           tags: {
@@ -334,11 +341,7 @@ export class DocumentService {
           },
         },
       });
-
-      return updatedBlock;
     });
-
-    return updatedBlock;
   }
 
   private async _handleBlockTags(

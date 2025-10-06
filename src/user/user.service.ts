@@ -4,6 +4,8 @@ import type { DbType } from '../db/drizzle.module';
 import { DB } from '../db/drizzle.module';
 import * as schema from '../db/schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto'; // Added
 import * as bcrypt from 'bcrypt';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -76,5 +78,96 @@ export class UserService {
 
     this.logger.log(`User with email ${email} not found.`);
     return undefined;
+  }
+
+  async getProfile(userId: string) {
+    this.logger.log(`Fetching profile for user ID: ${userId}`);
+    const userProfile = await this.db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+      columns: {
+        id: true,
+        email: true,
+        name: true,
+        timezone: true,
+        language: true,
+        theme: true,
+      },
+    });
+
+    if (!userProfile) {
+      throw new ConflictException('User profile not found.');
+    }
+    return userProfile;
+  }
+
+  async updateProfile(userId: string, updateData: UpdateUserProfileDto) {
+    this.logger.log(`Updating profile for user ID: ${userId}`);
+    const { fullName, email, ...rest } = updateData;
+
+    const [updatedUser] = await this.db
+      .update(schema.users)
+      .set({
+        ...(fullName && { name: fullName }),
+        ...(email && { email }),
+        ...rest,
+        updatedAt: new Date(), // Assuming updatedAt exists in schema, add if not
+      })
+      .where(eq(schema.users.id, userId))
+      .returning({
+        id: schema.users.id,
+        email: schema.users.email,
+        name: schema.users.name,
+        timezone: schema.users.timezone,
+        language: schema.users.language,
+        theme: schema.users.theme,
+      });
+
+    if (!updatedUser) {
+      throw new ConflictException('User profile not found or could not be updated.');
+    }
+    return updatedUser;
+  }
+
+  async getNotificationPreferences(userId: string) {
+    this.logger.log(`Fetching notification preferences for user ID: ${userId}`);
+    const userPreferences = await this.db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+      columns: {
+        emailNotifications: true,
+        taskAssignments: true,
+        reviewRequests: true,
+        weeklyDigest: true,
+      },
+    });
+
+    if (!userPreferences) {
+      throw new ConflictException('User not found.');
+    }
+    return userPreferences;
+  }
+
+  async updateNotificationPreferences(
+    userId: string,
+    updateData: UpdateNotificationPreferencesDto,
+  ) {
+    this.logger.log(`Updating notification preferences for user ID: ${userId}`);
+    const [updatedPreferences] = await this.db
+      .update(schema.users)
+      .set({
+        ...updateData,
+        updatedAt: new Date(), // Assuming updatedAt exists in schema, add if not
+      })
+      .where(eq(schema.users.id, userId))
+      .returning({
+        emailNotifications: schema.users.emailNotifications,
+        taskAssignments: schema.users.taskAssignments,
+        reviewRequests: schema.users.reviewRequests,
+        weeklyDigest: schema.users.weeklyDigest,
+      });
+
+    if (!updatedPreferences) {
+      throw new ConflictException('User not found or preferences could not be updated.');
+    }
+    return updatedPreferences;
   }
 }

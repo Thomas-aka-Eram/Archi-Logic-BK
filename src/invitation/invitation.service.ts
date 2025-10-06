@@ -9,7 +9,7 @@ import type { DbType } from '../db/drizzle.module';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import * as crypto from 'crypto';
 import { and, eq } from 'drizzle-orm';
-import { invitations, userProjects, activityLogs } from '../db/schema';
+import * as schema from '../db/schema';
 
 @Injectable()
 export class InvitationService {
@@ -22,24 +22,49 @@ export class InvitationService {
     console.log('createInvitationDto', createInvitationDto);
     const { projectId, roleOnJoin } = createInvitationDto;
 
-    const [projectMembership] = await this.db
-      .select()
-      .from(userProjects)
-      .where(
-        and(
-          eq(userProjects.userId, requestingUserId),
-          eq(userProjects.projectId, projectId),
-        ),
-      );
+    const projectMembership = await this.db.query.projectUserRoles.findFirst({
+      where: and(
+        eq(schema.projectUserRoles.userId, requestingUserId),
+        eq(schema.projectUserRoles.projectId, projectId),
+      ),
+      with: {
+        role: true,
+      },
+    });
 
-    if (
-      !projectMembership ||
-      !projectMembership.role ||
-      !['Owner', 'Manager'].includes(projectMembership.role)
-    ) {
-      throw new ForbiddenException(
-        'You do not have permission to invite users to this project.',
-      );
+    const requestingUserRole = projectMembership?.role?.name;
+    const invitedRole = roleOnJoin || 'Developer'; // Default role if not specified
+
+    // Check if the requesting user has a valid role before proceeding
+    if (!requestingUserRole) {
+      throw new ForbiddenException('You do not have a valid role in this project.');
+    }
+
+    // Define role hierarchy for comparison
+    const ROLE_HIERARCHY: { [key: string]: number } = {
+      'Admin': 3,
+      'Manager': 2,
+      'Developer': 1,
+      'Viewer': 1,
+      'Contributor': 1,
+      'QA': 1,
+      'Bot': 1,
+    };
+
+    const requestingUserRoleLevel = ROLE_HIERARCHY[requestingUserRole];
+    const invitedRoleLevel = ROLE_HIERARCHY[invitedRole];
+
+    // Check if the requesting user's role level is defined in the hierarchy
+    if (requestingUserRoleLevel === undefined) {
+      throw new ForbiddenException('Your role is not recognized in the system.');
+    }
+
+    if (requestingUserRoleLevel < 2) { // Roles lower than Manager (Developer, Viewer, etc.)
+      throw new ForbiddenException('You do not have permission to invite users to this project.');
+    }
+
+    if (requestingUserRole === 'Manager' && invitedRoleLevel >= ROLE_HIERARCHY['Manager']) {
+      throw new ForbiddenException('Managers can only invite roles lower than themselves.');
     }
 
     const token = crypto.randomBytes(32).toString('base64url');
@@ -48,7 +73,7 @@ export class InvitationService {
 
     const invitationId = await this.db.transaction(async (tx) => {
       const [invitation] = await tx
-        .insert(invitations)
+        .insert(schema.invitations)
         .values({
           projectId,
           codeHash,
@@ -58,7 +83,7 @@ export class InvitationService {
         })
         .returning();
 
-      await tx.insert(activityLogs).values({
+      await tx.insert(schema.activityLogs).values({
         userId: requestingUserId,
         projectId,
         action: 'INVITE_CREATED',
@@ -86,11 +111,11 @@ export class InvitationService {
     return this.db.transaction(async (tx) => {
       const [invitation] = await tx
         .select()
-        .from(invitations)
+        .from(schema.invitations)
         .where(
           and(
-            eq(invitations.codeHash, codeHash),
-            eq(invitations.status, 'active'),
+            eq(schema.invitations.codeHash, codeHash),
+            eq(schema.invitations.status, 'active'),
           ),
         )
         .for('update');
@@ -101,19 +126,19 @@ export class InvitationService {
 
       if (new Date() > invitation.expiresAt) {
         await tx
-          .update(invitations)
+          .update(schema.invitations)
           .set({ status: 'expired' })
-          .where(eq(invitations.id, invitation.id));
+          .where(eq(schema.invitations.id, invitation.id));
         throw new ForbiddenException('Invitation code has expired.');
       }
 
-      const [existingMembership] = await tx
+      const [existingMembership] = await this.db
         .select()
-        .from(userProjects)
+        .from(schema.projectUserRoles)
         .where(
           and(
-            eq(userProjects.userId, joiningUserId),
-            eq(userProjects.projectId, invitation.projectId),
+            eq(schema.projectUserRoles.userId, joiningUserId),
+            eq(schema.projectUserRoles.projectId, invitation.projectId),
           ),
         );
 
@@ -122,23 +147,40 @@ export class InvitationService {
         return { projectId: invitation.projectId, message: 'Already a member of this project.' };
       }
 
-      await tx.insert(userProjects).values({
-        userId: joiningUserId,
-        projectId: invitation.projectId,
-        role: invitation.roleOnJoin,
-        // Permissions would be derived here based on the role
+      // Find the roleId for the roleOnJoin
+      const role = await tx.query.roles.findFirst({
+        where: eq(schema.roles.name, invitation.roleOnJoin as string),
       });
 
+      if (!role) {
+        throw new NotFoundException(`Role '${invitation.roleOnJoin}' not found.`);
+      }
+
+      // Insert into projectUserRoles
+      await tx.insert(schema.projectUserRoles).values({
+        userId: joiningUserId,
+        projectId: invitation.projectId,
+        roleId: role.id,
+      });
+
+      // Remove the old userProjects entry for the joining user and project
+      await tx.delete(schema.userProjects).where(
+        and(
+          eq(schema.userProjects.userId, joiningUserId),
+          eq(schema.userProjects.projectId, invitation.projectId),
+        ),
+      );
+
       await tx
-        .update(invitations)
+        .update(schema.invitations)
         .set({
           status: 'used',
           usedBy: joiningUserId,
           usedAt: new Date(),
         })
-        .where(eq(invitations.id, invitation.id));
+        .where(eq(schema.invitations.id, invitation.id));
 
-      await tx.insert(activityLogs).values({
+      await tx.insert(schema.activityLogs).values({
         userId: joiningUserId,
         projectId: invitation.projectId,
         action: 'INVITE_USED',
@@ -157,8 +199,8 @@ export class InvitationService {
     return this.db.transaction(async (tx) => {
       const [invitation] = await tx
         .select()
-        .from(invitations)
-        .where(eq(invitations.id, invitationId));
+        .from(schema.invitations)
+        .where(eq(schema.invitations.id, invitationId));
 
       if (!invitation) {
         throw new NotFoundException('Invitation not found.');
@@ -166,11 +208,11 @@ export class InvitationService {
 
       const [projectMembership] = await tx
         .select()
-        .from(userProjects)
+        .from(schema.userProjects)
         .where(
           and(
-            eq(userProjects.userId, requestingUserId),
-            eq(userProjects.projectId, invitation.projectId),
+            eq(schema.userProjects.userId, requestingUserId),
+            eq(schema.userProjects.projectId, invitation.projectId),
           ),
         );
 
@@ -180,7 +222,7 @@ export class InvitationService {
         !['Owner', 'Manager'].includes(projectMembership.role)
       ) {
         throw new ForbiddenException(
-          'You do not have permission to revoke invitations for this project.',
+          'You do not have permission to revoke schema.invitations for this project.',
         );
       }
 
@@ -189,11 +231,11 @@ export class InvitationService {
       }
 
       await tx
-        .update(invitations)
+        .update(schema.invitations)
         .set({ status: 'revoked' })
-        .where(eq(invitations.id, invitationId));
+        .where(eq(schema.invitations.id, invitationId));
 
-      await tx.insert(activityLogs).values({
+      await tx.insert(schema.activityLogs).values({
         userId: requestingUserId,
         projectId: invitation.projectId,
         action: 'INVITE_REVOKED',

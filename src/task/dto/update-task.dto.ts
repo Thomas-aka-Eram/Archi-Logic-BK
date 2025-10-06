@@ -49,4 +49,8 @@ export class UpdateTaskDto {
   @Type(() => AssignmentDto)
   @IsOptional()
   assignees?: AssignmentDto[];
+
+  @IsUUID()
+  @IsOptional()
+  assigneeId?: string;
 }
