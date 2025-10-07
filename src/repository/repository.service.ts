@@ -1,9 +1,9 @@
-import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
-import type { DbType } from '../db/drizzle.module';
-import { DB } from '../db/drizzle.module';
-import * as schema from '../db/schema';
-import { AddRepositoryDto } from './dto/add-repository.dto';
+
+import { Inject, Injectable } from '@nestjs/common';
+import { DB, type DbType } from '../db/drizzle.module';
 import { and, eq } from 'drizzle-orm';
+import { repositories } from '../db/schema';
+import { CreateRepositoryDto } from './dto/create-repository.dto';
 
 @Injectable()
 export class RepositoryService {
@@ -11,27 +11,72 @@ export class RepositoryService {
 
   async addRepository(
     projectId: string,
-    addRepositoryDto: AddRepositoryDto,
-    actorUserId: string,
+    createRepositoryDto: CreateRepositoryDto,
+    userId: string,
   ) {
-    const { name, webhookSecret } = addRepositoryDto;
+    const [newRepository] = await this.db
+      .insert(repositories)
+      .values(createRepositoryDto)
+      .returning();
+    return newRepository;
+  }
 
-    return this.db.transaction(async (tx) => {
-      // Optional: Check for MANAGE_SETTINGS permission
-      // const [actorMembership] = await tx.select().from(schema.userProjects)...
+  async findByProjectId(projectId: string) {
+    return this.db
+      .select()
+      .from(repositories)
+      .where(eq(repositories.projectId, projectId));
+  }
 
-      const [newRepository] = await tx
-        .insert(schema.repositories)
-        .values({
-          projectId,
-          name,
-          webhookSecret,
-        })
-        .returning();
+  async findById(id: string) {
+    const [repo] = await this.db
+      .select()
+      .from(repositories)
+      .where(eq(repositories.id, id));
+    return repo;
+  }
 
-      // TODO: Add activity log
+  async findByRepoName(name: string) {
+    const [repo] = await this.db
+      .select()
+      .from(repositories)
+      .where(eq(repositories.name, name));
+    return repo;
+  }
 
-      return newRepository;
-    });
+  async findByProjectIdAndName(projectId: string, name: string) {
+    return this.db
+      .select()
+      .from(repositories)
+      .where(
+        and(eq(repositories.projectId, projectId), eq(repositories.name, name)),
+      );
+  }
+
+  async updateAccessToken(id: string, accessToken: string) {
+    const [updatedRepository] = await this.db
+      .update(repositories)
+      .set({ accessToken })
+      .where(eq(repositories.id, id))
+      .returning();
+    return updatedRepository;
+  }
+
+  async updateWebhookEvents(id: string, events: string[]) {
+    const [updatedRepository] = await this.db
+      .update(repositories)
+      .set({ webhookEvents: events })
+      .where(eq(repositories.id, id))
+      .returning();
+    return updatedRepository;
+  }
+
+  async updateWebhookSecret(id: string, secret: string) {
+    const [updatedRepository] = await this.db
+      .update(repositories)
+      .set({ webhookSecret: secret })
+      .where(eq(repositories.id, id))
+      .returning();
+    return updatedRepository;
   }
 }

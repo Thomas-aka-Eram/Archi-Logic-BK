@@ -80,6 +80,49 @@ export class UserService {
     return undefined;
   }
 
+  async findByEmail(email: string) {
+    this.logger.log(`Searching for user with email: ${email}`);
+    const user = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+
+    if (user.length > 0) {
+      this.logger.log(`User with email ${email} found.`);
+      return user[0];
+    }
+
+    this.logger.log(`User with email ${email} not found.`);
+    return undefined;
+  }
+
+  async findById(id: string) {
+    this.logger.log(`Searching for user with id: ${id}`);
+    const user = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, id));
+
+    if (user.length > 0) {
+      this.logger.log(`User with id ${id} found.`);
+      return user[0];
+    }
+
+    this.logger.log(`User with id ${id} not found.`);
+    return undefined;
+  }
+
+  async updateGithubAccessToken(userId: string, accessToken: string) {
+    this.logger.log(`Updating github access token for user ID: ${userId}`);
+    await this.db
+      .update(schema.users)
+      .set({
+        githubAccessToken: accessToken,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.id, userId));
+  }
+
   async getProfile(userId: string) {
     this.logger.log(`Fetching profile for user ID: ${userId}`);
     const userProfile = await this.db.query.users.findFirst({

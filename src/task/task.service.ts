@@ -393,6 +393,10 @@ export class TaskService {
     }
   }
 
+  async linkCommit(taskId: string, commitId: string) {
+    await this.db.insert(schema.taskCommits).values({ taskId, commitId }).onConflictDoNothing();
+  }
+
   private async validateCircularDependencies(
     newTaskId: string,
     dependsOnIds: string[],

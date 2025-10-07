@@ -23,12 +23,14 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 import { DocumentService } from '../document/document.service';
 import { CreateDocumentDto } from '../document/dto/create-document.dto';
+import { RepositoryService } from '../repository/repository.service';
 
 @Controller('projects')
 export class ProjectController {
   constructor(
     private readonly projectService: ProjectService,
     private readonly documentService: DocumentService,
+    private readonly repositoryService: RepositoryService,
   ) {}
 
   @Post(':projectId/documents')
@@ -53,6 +55,14 @@ export class ProjectController {
     @Query('phase') phaseKey?: string,
   ) {
     return this.documentService.getDocumentsForProject(projectId, phaseKey);
+  }
+
+  @Get(':projectId/repos')
+  @UseGuards(JwtAuthGuard)
+  async getProjectRepositories(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
+    return this.repositoryService.findByProjectId(projectId);
   }
 
   @Get()

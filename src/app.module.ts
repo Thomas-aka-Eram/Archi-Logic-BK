@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DrizzleModule } from './db/drizzle.module';
@@ -14,9 +15,13 @@ import { AuthModule } from './auth/auth.module';
 import { SearchModule } from './search/search.module';
 import { InvitationModule } from './invitation/invitation.module';
 import { DomainModule } from './domain/domain.module';
+import { GithubModule } from './github/github.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     DrizzleModule,
     UserModule,
     ProjectModule,
@@ -30,6 +35,7 @@ import { DomainModule } from './domain/domain.module';
     SearchModule,
     InvitationModule,
     DomainModule,
+    GithubModule,
   ],
   controllers: [AppController],
   providers: [AppService],

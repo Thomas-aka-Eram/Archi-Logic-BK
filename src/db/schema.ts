@@ -10,6 +10,7 @@ import {
   index,
   unique,
   customType,
+  serial,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -32,6 +33,7 @@ export const users = pgTable('users', {
   name: varchar('name', { length: 150 }),
   // store hashed password (or empty when using SSO)
   passwordHash: text('password_hash'),
+  githubAccessToken: text('github_access_token'),
   role: varchar('role', { length: 50 }).default('Developer'), // global role
   timezone: varchar('timezone', { length: 50 }).default('UTC'),
   language: varchar('language', { length: 10 }).default('en'),
@@ -328,6 +330,7 @@ export const tasks = pgTable(
   'tasks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    numericId: serial('numeric_id').unique(),
     projectId: uuid('project_id')
       .references(() => projects.id, { onDelete: 'cascade' })
       .notNull(),
@@ -431,6 +434,10 @@ export const repositories = pgTable(
       .notNull(),
     name: varchar('name', { length: 300 }).notNull(), // e.g. org/repo
     webhookSecret: varchar('webhook_secret', { length: 255 }),
+    webhookEvents: text('webhook_events').array(),
+    lastSynced: timestamp('last_synced'),
+    accessToken: text('access_token'), // Encrypted GitHub OAuth token or installation token
+    installationId: integer('installation_id'), // GitHub App installation ID
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow(),
   },

@@ -21,10 +21,19 @@ export class RepositoryController {
     @Request() req,
   ) {
     // const userId = req.user.id;
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    const { name } = addRepositoryDto;
+    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; // Replace with actual user ID from req.user.id
+    const mockAccessToken = 'gho_mock_access_token'; // Replace with actual access token from req.user.githubAccessToken
+
+    const createRepositoryPayload = {
+      projectId,
+      name,
+      accessToken: mockAccessToken,
+    };
+
     return this.repositoryService.addRepository(
       projectId,
-      addRepositoryDto,
+      createRepositoryPayload,
       mockUserId,
     );
   }
