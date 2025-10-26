@@ -49,7 +49,9 @@ export class DocumentService {
     });
 
     if (!phase) {
-      throw new NotFoundException(`Phase with key "${phaseKey}" not found in this project.`);
+      throw new NotFoundException(
+        `Phase with key "${phaseKey}" not found in this project.`,
+      );
     }
 
     const [newDocument] = await this.db
@@ -66,7 +68,9 @@ export class DocumentService {
   }
 
   async deleteDocument(docId: string) {
-    await this.db.delete(schema.documents).where(eq(schema.documents.id, docId));
+    await this.db
+      .delete(schema.documents)
+      .where(eq(schema.documents.id, docId));
     return { message: 'Document deleted successfully' };
   }
 
@@ -128,7 +132,10 @@ export class DocumentService {
       },
     });
 
-    console.log('Blocks from DB with relations:', JSON.stringify(blocks, null, 2));
+    console.log(
+      'Blocks from DB with relations:',
+      JSON.stringify(blocks, null, 2),
+    );
 
     const result = blocks.map((block) => ({
       ...block,
@@ -136,7 +143,10 @@ export class DocumentService {
       domains: block.domains.map((blockDomain) => blockDomain.domain),
     }));
 
-    console.log('Mapped blocks being returned:', JSON.stringify(result, null, 2));
+    console.log(
+      'Mapped blocks being returned:',
+      JSON.stringify(result, null, 2),
+    );
 
     return result;
   }
@@ -285,13 +295,20 @@ export class DocumentService {
       const [block] = await tx
         .select()
         .from(schema.blocks)
-        .where(and(eq(schema.blocks.blockGroupId, blockGroupId), eq(schema.blocks.isCurrentVersion, true)));
+        .where(
+          and(
+            eq(schema.blocks.blockGroupId, blockGroupId),
+            eq(schema.blocks.isCurrentVersion, true),
+          ),
+        );
 
       if (!block) {
         throw new NotFoundException('Block not found.');
       }
 
-      await tx.delete(schema.blockTags).where(eq(schema.blockTags.blockId, block.id));
+      await tx
+        .delete(schema.blockTags)
+        .where(eq(schema.blockTags.blockId, block.id));
       await this._handleBlockTags(tx, block.id, tagIds);
 
       return tx.query.blocks.findFirst({
@@ -317,13 +334,20 @@ export class DocumentService {
       const [block] = await tx
         .select()
         .from(schema.blocks)
-        .where(and(eq(schema.blocks.blockGroupId, blockGroupId), eq(schema.blocks.isCurrentVersion, true)));
+        .where(
+          and(
+            eq(schema.blocks.blockGroupId, blockGroupId),
+            eq(schema.blocks.isCurrentVersion, true),
+          ),
+        );
 
       if (!block) {
         throw new NotFoundException('Block not found.');
       }
 
-      await tx.delete(schema.blockDomains).where(eq(schema.blockDomains.blockId, block.id));
+      await tx
+        .delete(schema.blockDomains)
+        .where(eq(schema.blockDomains.blockId, block.id));
       await this._handleBlockDomains(tx, block.id, [domainId]);
 
       return tx.query.blocks.findFirst({
@@ -402,5 +426,87 @@ export class DocumentService {
       where: eq(schema.blockDomains.blockId, blockId),
     });
     return previousDomains.map((d) => d.domainId);
+  }
+
+  async findRelatedDocuments(
+    domainId: string,
+    tagIds: string[],
+  ): Promise<
+    (typeof schema.documents.$inferSelect & {
+      blocks: (typeof schema.blocks.$inferSelect & {
+        tags: (typeof schema.tags.$inferSelect)[];
+      })[];
+    })[]
+  > {
+    if (!domainId) {
+      return [];
+    }
+
+    // 1. Find blocks that have the specified domainId
+    const blocksInDomain = await this.db.query.blocks.findMany({
+      where: and(
+        eq(schema.blocks.isCurrentVersion, true),
+        inArray(
+          schema.blocks.id,
+          this.db
+            .select({ blockId: schema.blockDomains.blockId })
+            .from(schema.blockDomains)
+            .where(eq(schema.blockDomains.domainId, domainId)),
+        ),
+      ),
+      with: {
+        tags: {
+          with: {
+            tag: true,
+          },
+        },
+      },
+    });
+
+    // 2. Filter these blocks by tagIds if provided
+    const filteredBlocks =
+      tagIds.length > 0
+        ? blocksInDomain.filter((block) =>
+            block.tags.some((blockTag) => tagIds.includes(blockTag.tag.id)),
+          )
+        : blocksInDomain;
+
+    if (filteredBlocks.length === 0) {
+      return [];
+    }
+
+    // 3. Group blocks by documentId
+    const blocksByDocumentId = filteredBlocks.reduce(
+      (acc, block) => {
+        if (!acc[block.documentId]) {
+          acc[block.documentId] = [];
+        }
+        acc[block.documentId].push({
+          ...block,
+          tags: block.tags.map((bt) => bt.tag),
+        });
+        return acc;
+      },
+      {} as Record<
+        string,
+        (typeof schema.blocks.$inferSelect & {
+          tags: (typeof schema.tags.$inferSelect)[];
+        })[]
+      >,
+    );
+
+    // 4. Fetch the parent documents for these blocks
+    const documentIds = Object.keys(blocksByDocumentId);
+    const documents = await this.db.query.documents.findMany({
+      where: inArray(schema.documents.id, documentIds),
+    });
+
+    // 5. Combine documents with their filtered blocks
+    const result = documents.map((doc) => ({
+      ...doc,
+      blocks: blocksByDocumentId[doc.id] || [],
+    }));
+
+    return result;
   }
 }

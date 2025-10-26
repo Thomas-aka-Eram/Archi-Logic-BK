@@ -37,18 +37,20 @@ export class InvitationService {
 
     // Check if the requesting user has a valid role before proceeding
     if (!requestingUserRole) {
-      throw new ForbiddenException('You do not have a valid role in this project.');
+      throw new ForbiddenException(
+        'You do not have a valid role in this project.',
+      );
     }
 
     // Define role hierarchy for comparison
     const ROLE_HIERARCHY: { [key: string]: number } = {
-      'Admin': 3,
-      'Manager': 2,
-      'Developer': 1,
-      'Viewer': 1,
-      'Contributor': 1,
-      'QA': 1,
-      'Bot': 1,
+      Admin: 3,
+      Manager: 2,
+      Developer: 1,
+      Viewer: 1,
+      Contributor: 1,
+      QA: 1,
+      Bot: 1,
     };
 
     const requestingUserRoleLevel = ROLE_HIERARCHY[requestingUserRole];
@@ -56,15 +58,25 @@ export class InvitationService {
 
     // Check if the requesting user's role level is defined in the hierarchy
     if (requestingUserRoleLevel === undefined) {
-      throw new ForbiddenException('Your role is not recognized in the system.');
+      throw new ForbiddenException(
+        'Your role is not recognized in the system.',
+      );
     }
 
-    if (requestingUserRoleLevel < 2) { // Roles lower than Manager (Developer, Viewer, etc.)
-      throw new ForbiddenException('You do not have permission to invite users to this project.');
+    if (requestingUserRoleLevel < 2) {
+      // Roles lower than Manager (Developer, Viewer, etc.)
+      throw new ForbiddenException(
+        'You do not have permission to invite users to this project.',
+      );
     }
 
-    if (requestingUserRole === 'Manager' && invitedRoleLevel >= ROLE_HIERARCHY['Manager']) {
-      throw new ForbiddenException('Managers can only invite roles lower than themselves.');
+    if (
+      requestingUserRole === 'Manager' &&
+      invitedRoleLevel >= ROLE_HIERARCHY['Manager']
+    ) {
+      throw new ForbiddenException(
+        'Managers can only invite roles lower than themselves.',
+      );
     }
 
     const token = crypto.randomBytes(32).toString('base64url');
@@ -121,7 +133,9 @@ export class InvitationService {
         .for('update');
 
       if (!invitation) {
-        throw new NotFoundException('Invitation code is invalid or has been used.');
+        throw new NotFoundException(
+          'Invitation code is invalid or has been used.',
+        );
       }
 
       if (new Date() > invitation.expiresAt) {
@@ -144,7 +158,10 @@ export class InvitationService {
 
       if (existingMembership) {
         // Idempotent: if already a member, do nothing.
-        return { projectId: invitation.projectId, message: 'Already a member of this project.' };
+        return {
+          projectId: invitation.projectId,
+          message: 'Already a member of this project.',
+        };
       }
 
       // Find the roleId for the roleOnJoin
@@ -153,7 +170,9 @@ export class InvitationService {
       });
 
       if (!role) {
-        throw new NotFoundException(`Role '${invitation.roleOnJoin}' not found.`);
+        throw new NotFoundException(
+          `Role '${invitation.roleOnJoin}' not found.`,
+        );
       }
 
       // Insert into projectUserRoles
@@ -164,12 +183,14 @@ export class InvitationService {
       });
 
       // Remove the old userProjects entry for the joining user and project
-      await tx.delete(schema.userProjects).where(
-        and(
-          eq(schema.userProjects.userId, joiningUserId),
-          eq(schema.userProjects.projectId, invitation.projectId),
-        ),
-      );
+      await tx
+        .delete(schema.userProjects)
+        .where(
+          and(
+            eq(schema.userProjects.userId, joiningUserId),
+            eq(schema.userProjects.projectId, invitation.projectId),
+          ),
+        );
 
       await tx
         .update(schema.invitations)
@@ -191,7 +212,10 @@ export class InvitationService {
         },
       });
 
-      return { projectId: invitation.projectId, message: 'Successfully joined project.' };
+      return {
+        projectId: invitation.projectId,
+        message: 'Successfully joined project.',
+      };
     });
   }
 

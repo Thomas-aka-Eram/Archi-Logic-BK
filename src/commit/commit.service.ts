@@ -1,4 +1,3 @@
-
 import { Inject, Injectable } from '@nestjs/common';
 import { DB, type DbType } from '../db/drizzle.module';
 import { commits } from '../db/schema';

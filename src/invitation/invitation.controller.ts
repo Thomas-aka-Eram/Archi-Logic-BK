@@ -1,5 +1,12 @@
-
-import { Controller, Post, Body, Req, UseGuards, Param, ValidationPipe } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  Param,
+  ValidationPipe,
+} from '@nestjs/common';
 import { InvitationService } from './invitation.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -27,6 +34,9 @@ export class InvitationController {
   @UseGuards(JwtAuthGuard)
   @Post('/join')
   async joinByCode(@Req() req, @Body() joinByCodeDto: JoinByCodeDto) {
-    return this.invitationService.joinByCode(req.user.userId, joinByCodeDto.code);
+    return this.invitationService.joinByCode(
+      req.user.userId,
+      joinByCodeDto.code,
+    );
   }
 }

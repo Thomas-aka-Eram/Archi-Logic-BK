@@ -98,10 +98,7 @@ export class UserService {
 
   async findById(id: string) {
     this.logger.log(`Searching for user with id: ${id}`);
-    const user = await this.db
-      .select()
-      .from(users)
-      .where(eq(users.id, id));
+    const user = await this.db.select().from(users).where(eq(users.id, id));
 
     if (user.length > 0) {
       this.logger.log(`User with id ${id} found.`);
@@ -166,7 +163,9 @@ export class UserService {
       });
 
     if (!updatedUser) {
-      throw new ConflictException('User profile not found or could not be updated.');
+      throw new ConflictException(
+        'User profile not found or could not be updated.',
+      );
     }
     return updatedUser;
   }
@@ -209,7 +208,9 @@ export class UserService {
       });
 
     if (!updatedPreferences) {
-      throw new ConflictException('User not found or preferences could not be updated.');
+      throw new ConflictException(
+        'User not found or preferences could not be updated.',
+      );
     }
     return updatedPreferences;
   }

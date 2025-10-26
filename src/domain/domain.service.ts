@@ -18,7 +18,9 @@ export class DomainService {
     });
 
     if (existing) {
-      throw new ConflictException('A domain with this name already exists for this project.');
+      throw new ConflictException(
+        'A domain with this name already exists for this project.',
+      );
     }
 
     const [newDomain] = await this.db
@@ -35,6 +37,9 @@ export class DomainService {
   }
 
   async findAll(projectId: string) {
-    return this.db.select().from(domains).where(eq(domains.projectId, projectId));
+    return this.db
+      .select()
+      .from(domains)
+      .where(eq(domains.projectId, projectId));
   }
 }

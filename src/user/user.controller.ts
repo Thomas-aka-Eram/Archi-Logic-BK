@@ -35,7 +35,10 @@ export class UserController {
     @Request() req,
     @Body(new ValidationPipe()) updateUserProfileDto: UpdateUserProfileDto,
   ) {
-    return this.userService.updateProfile(req.user.userId, updateUserProfileDto);
+    return this.userService.updateProfile(
+      req.user.userId,
+      updateUserProfileDto,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

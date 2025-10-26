@@ -46,7 +46,7 @@ export class TaskService {
       );
     }
 
-    console.log("Create Task DTO in service:", createTaskDto);
+    console.log('Create Task DTO in service:', createTaskDto);
     const {
       title,
       description,
@@ -210,6 +210,8 @@ export class TaskService {
             tag: true,
           },
         },
+        domain: true,
+        phase: true,
       },
     });
 
@@ -220,7 +222,11 @@ export class TaskService {
     return task;
   }
 
-  async updateTask(taskId: string, updateTaskDto: UpdateTaskDto, userId: string) {
+  async updateTask(
+    taskId: string,
+    updateTaskDto: UpdateTaskDto,
+    userId: string,
+  ) {
     const { dueDate, assignees, assigneeId, ...rest } = updateTaskDto;
 
     // TODO: Implement proper role-based access control for task updates
@@ -238,10 +244,18 @@ export class TaskService {
       }
 
       if (assigneeId) {
-        await tx.delete(schema.userTasks).where(eq(schema.userTasks.taskId, taskId));
-        await this.assignMultipleUsers(taskId, [{ userId: assigneeId, role: 'developer' }], tx);
+        await tx
+          .delete(schema.userTasks)
+          .where(eq(schema.userTasks.taskId, taskId));
+        await this.assignMultipleUsers(
+          taskId,
+          [{ userId: assigneeId, role: 'developer' }],
+          tx,
+        );
       } else if (assignees) {
-        await tx.delete(schema.userTasks).where(eq(schema.userTasks.taskId, taskId));
+        await tx
+          .delete(schema.userTasks)
+          .where(eq(schema.userTasks.taskId, taskId));
         if (assignees.length > 0) {
           await this.assignMultipleUsers(taskId, assignees, tx);
         }
@@ -321,7 +335,7 @@ export class TaskService {
       throw new NotFoundException('Task not found');
     }
 
-    const tagIds = task.tags.map(t => t.tag.id);
+    const tagIds = task.tags.map((t) => t.tag.id);
     const projectId = task.projectId;
 
     const projectMembers = await this.db.query.projectUserRoles.findMany({
@@ -366,7 +380,10 @@ export class TaskService {
           skillMatch: Math.round(skillMatchScore),
           workload: Math.round(workload),
           velocity: Math.round(velocity),
-          reasons: ['Skill match', 'High capacity', 'Good velocity'].slice(0, 1 + Math.floor(Math.random() * 3)), // Mock reasons
+          reasons: ['Skill match', 'High capacity', 'Good velocity'].slice(
+            0,
+            1 + Math.floor(Math.random() * 3),
+          ), // Mock reasons
         };
       }),
     );
@@ -394,7 +411,10 @@ export class TaskService {
   }
 
   async linkCommit(taskId: string, commitId: string) {
-    await this.db.insert(schema.taskCommits).values({ taskId, commitId }).onConflictDoNothing();
+    await this.db
+      .insert(schema.taskCommits)
+      .values({ taskId, commitId })
+      .onConflictDoNothing();
   }
 
   private async validateCircularDependencies(

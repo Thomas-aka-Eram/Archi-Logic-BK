@@ -858,6 +858,14 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     fields: [tasks.projectId],
     references: [projects.id],
   }),
+  phase: one(projectPhases, {
+    fields: [tasks.phaseId],
+    references: [projectPhases.id],
+  }),
+  domain: one(domains, {
+    fields: [tasks.domainId],
+    references: [domains.id],
+  }),
   assignees: many(userTasks),
   dependencies: many(taskDependencies, { relationName: 'task_dependencies' }),
   dependents: many(taskDependencies, { relationName: 'task_dependents' }),
@@ -903,13 +911,16 @@ export const taskTagsRelations = relations(taskTags, ({ one }) => ({
   }),
 }));
 
-export const repositoriesRelations = relations(repositories, ({ one, many }) => ({
-  project: one(projects, {
-    fields: [repositories.projectId],
-    references: [projects.id],
+export const repositoriesRelations = relations(
+  repositories,
+  ({ one, many }) => ({
+    project: one(projects, {
+      fields: [repositories.projectId],
+      references: [projects.id],
+    }),
+    commits: many(commits),
   }),
-  commits: many(commits),
-}));
+);
 
 export const commitsRelations = relations(commits, ({ one, many }) => ({
   repository: one(repositories, {
@@ -972,18 +983,20 @@ export const rolesRelations = relations(roles, ({ many }) => ({
   projectUserRoles: many(projectUserRoles),
 }));
 
-export const projectUserRolesRelations = relations(projectUserRoles, ({ one }) => ({
-  project: one(projects, {
-    fields: [projectUserRoles.projectId],
-    references: [projects.id],
+export const projectUserRolesRelations = relations(
+  projectUserRoles,
+  ({ one }) => ({
+    project: one(projects, {
+      fields: [projectUserRoles.projectId],
+      references: [projects.id],
+    }),
+    user: one(users, {
+      fields: [projectUserRoles.userId],
+      references: [users.id],
+    }),
+    role: one(roles, {
+      fields: [projectUserRoles.roleId],
+      references: [roles.id],
+    }),
   }),
-  user: one(users, {
-    fields: [projectUserRoles.userId],
-    references: [users.id],
-  }),
-  role: one(roles, {
-    fields: [projectUserRoles.roleId],
-    references: [roles.id],
-  }),
-}));
-
+);

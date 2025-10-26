@@ -19,8 +19,6 @@ import { AddTaskDependencyDto } from './dto/add-task-dependency.dto';
 import { GetUnassignedTasksDto } from './dto/get-unassigned-tasks.dto';
 import { AssignUsersDto } from './dto/assign-users.dto';
 
-
-
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TaskController {
@@ -39,14 +37,19 @@ export class TaskController {
     @Request() req,
   ) {
     console.log('Received createTask DTO:', createTaskDto);
-    console.log("Create Task DTO:", createTaskDto);
-    return this.taskService.createTask(projectId, createTaskDto, req.user.userId);
+    console.log('Create Task DTO:', createTaskDto);
+    return this.taskService.createTask(
+      projectId,
+      createTaskDto,
+      req.user.userId,
+    );
   }
 
   @Get('/project/:projectId/unassigned')
   async getUnassignedTasks(
     @Param('projectId', ParseUUIDPipe) projectId: string,
-    @Query(new ValidationPipe({ transform: true })) query: GetUnassignedTasksDto,
+    @Query(new ValidationPipe({ transform: true }))
+    query: GetUnassignedTasksDto,
   ) {
     return this.taskService.getUnassignedTasks(projectId, query);
   }
@@ -72,8 +75,6 @@ export class TaskController {
     const userId = req.user.userId; // Correctly access userId from req.user
     return this.taskService.updateTask(taskId, updateTaskDto, userId);
   }
-
-  
 
   @Post(':id/dependencies')
   async addTaskDependency(

@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { drizzle, NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
+import {
+  drizzle,
+  NodePgDatabase,
+  NodePgTransaction,
+} from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import { ExtractTablesWithRelations } from 'drizzle-orm';

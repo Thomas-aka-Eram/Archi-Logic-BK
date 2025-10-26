@@ -18,9 +18,14 @@ export class GithubService {
   async handleGithubAuth(user: any) {
     // The user object from the strategy now contains the Archi userId
     if (!user.userId || user.userId === 'undefined') {
-      throw new UnauthorizedException('Archi user ID not found in GitHub auth callback');
+      throw new UnauthorizedException(
+        'Archi user ID not found in GitHub auth callback',
+      );
     }
-    await this.userService.updateGithubAccessToken(user.userId, user.accessToken);
+    await this.userService.updateGithubAccessToken(
+      user.userId,
+      user.accessToken,
+    );
     return user;
   }
 
@@ -158,7 +163,9 @@ export class GithubService {
 
     const secret = repo.webhookSecret;
     if (!secret) {
-      throw new UnauthorizedException('Webhook secret not configured for repository');
+      throw new UnauthorizedException(
+        'Webhook secret not configured for repository',
+      );
     }
     const hmac = crypto.createHmac('sha1', secret);
     const digest = 'sha1=' + hmac.update(JSON.stringify(payload)).digest('hex');

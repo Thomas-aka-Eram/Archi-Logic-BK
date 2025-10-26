@@ -1,4 +1,3 @@
-
 import { IsUUID, IsString, IsOptional } from 'class-validator';
 
 export class CreateInvitationDto {

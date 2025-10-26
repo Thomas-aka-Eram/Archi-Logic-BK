@@ -18,12 +18,25 @@ import { UpdateBlockDto } from './dto/update-block.dto';
 import { AssignTagsDto } from './dto/assign-tags.dto';
 import { AssignDomainDto } from './dto/assign-domain.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FindRelatedDocumentsDto } from './dto/find-related-documents.dto';
 
 import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @Controller('documents')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
+
+  @Get('related')
+  @UseGuards(JwtAuthGuard)
+  async findRelatedDocuments(
+    @Query() query: FindRelatedDocumentsDto,
+  ) {
+    console.log('Received query in controller:', query);
+    const { domainId, tagIds } = query;
+    console.log(`Controller received domainId: ${domainId}`);
+    console.log(`Controller received tagIds: ${JSON.stringify(tagIds)}`);
+    return this.documentService.findRelatedDocuments(domainId, tagIds || []);
+  }
 
   @Patch(':docId')
   @UseGuards(JwtAuthGuard)

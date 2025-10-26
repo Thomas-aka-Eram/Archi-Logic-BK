@@ -1,5 +1,18 @@
-
-import { Controller, Get, UseGuards, Req, Res, Query, Param, ParseUUIDPipe, Post, Body, Headers, ExecutionContext, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Req,
+  Res,
+  Query,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Body,
+  Headers,
+  ExecutionContext,
+  Patch,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { GithubService } from './github.service';
 
@@ -13,7 +26,9 @@ class GithubAuthGuard extends AuthGuard('github') {
       return undefined;
     }
     // Encode both IDs into the state parameter for retrieval in the callback
-    const state = Buffer.from(JSON.stringify({ projectId, userId })).toString('base64');
+    const state = Buffer.from(JSON.stringify({ projectId, userId })).toString(
+      'base64',
+    );
     return { state };
   }
 }
@@ -33,7 +48,9 @@ export class GithubController {
   async githubAuthCallback(@Req() req, @Res() res) {
     const user = await this.githubService.handleGithubAuth(req.user);
     // Redirect the user to the repository selection page
-    res.redirect(`http://localhost:8080/project/${user.projectId}/github/select-repo`);
+    res.redirect(
+      `http://localhost:8080/project/${user.projectId}/github/select-repo`,
+    );
   }
 
   @Get('user/repos')
@@ -45,7 +62,9 @@ export class GithubController {
 
   @Get('/projects/:projectId/integration/github')
   @UseGuards(AuthGuard('jwt'))
-  async getIntegrationStatus(@Param('projectId', ParseUUIDPipe) projectId: string) {
+  async getIntegrationStatus(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
     return this.githubService.getIntegrationStatus(projectId);
   }
 
@@ -67,7 +86,9 @@ export class GithubController {
 
   @Get('/projects/:projectId/github/commits')
   @UseGuards(AuthGuard('jwt'))
-  async getProjectCommits(@Param('projectId', ParseUUIDPipe) projectId: string) {
+  async getProjectCommits(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
     return this.githubService.getProjectCommits(projectId);
   }
 
@@ -93,7 +114,10 @@ export class GithubController {
   }
 
   @Post('webhook')
-  async webhook(@Body() body: any, @Headers('x-hub-signature') signature: string) {
+  async webhook(
+    @Body() body: any,
+    @Headers('x-hub-signature') signature: string,
+  ) {
     this.githubService.handleWebhook(body, signature);
   }
 }

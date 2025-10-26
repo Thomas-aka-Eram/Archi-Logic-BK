@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsUUID, IsOptional, IsHexColor } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  IsOptional,
+  IsHexColor,
+} from 'class-validator';
 
 export class CreateTagDto {
   @IsString()

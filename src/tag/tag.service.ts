@@ -56,11 +56,15 @@ export class TagService {
     });
 
     if (existing) {
-      throw new ConflictException('A tag with this name already exists for this project.');
+      throw new ConflictException(
+        'A tag with this name already exists for this project.',
+      );
     }
 
     const level = parentId ? (await this.getParentLevel(parentId)) + 1 : 0;
-    const inheritedColor = parentId ? await this.getInheritedColor(parentId) : color ?? '#cccccc';
+    const inheritedColor = parentId
+      ? await this.getInheritedColor(parentId)
+      : (color ?? '#cccccc');
 
     const [newTag] = await this.db
       .insert(tags)
@@ -80,8 +84,13 @@ export class TagService {
   }
 
   async findAll(projectId: string) {
-    const allTags = await this.db.select().from(tags).where(eq(tags.projectId, projectId));
-    const tagMap = new Map(allTags.map(tag => [tag.id, { ...tag, children: [] as string[] }]));
+    const allTags = await this.db
+      .select()
+      .from(tags)
+      .where(eq(tags.projectId, projectId));
+    const tagMap = new Map(
+      allTags.map((tag) => [tag.id, { ...tag, children: [] as string[] }]),
+    );
 
     for (const tag of allTags) {
       if (tag.parentId && tagMap.has(tag.parentId)) {

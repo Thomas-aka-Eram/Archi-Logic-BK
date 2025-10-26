@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-github2';
@@ -24,7 +23,9 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     done: any,
   ): Promise<any> {
     const { id, username, emails } = profile;
-    const state = JSON.parse(Buffer.from(req.query.state, 'base64').toString('utf-8'));
+    const state = JSON.parse(
+      Buffer.from(req.query.state, 'base64').toString('utf-8'),
+    );
     const { projectId, userId } = state;
 
     const user = {

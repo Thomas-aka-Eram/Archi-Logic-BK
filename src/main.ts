@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import * as bodyParser from 'body-parser';
+import { ValidationPipe } from '@nestjs/common';
 
 dotenv.config();
 
@@ -17,6 +18,15 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
 
   app.use(
     bodyParser.json({

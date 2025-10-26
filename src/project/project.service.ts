@@ -64,7 +64,9 @@ export class ProjectService {
     console.log('Queried adminRole:', adminRole);
 
     if (!adminRole) {
-      throw new NotFoundException('Admin role not found. Please seed the roles table.');
+      throw new NotFoundException(
+        'Admin role not found. Please seed the roles table.',
+      );
     }
 
     await this.db.insert(schema.projectUserRoles).values({
@@ -75,12 +77,14 @@ export class ProjectService {
 
     // Remove the old userProjects entry for the creator (if it exists, though it shouldn't for a new project)
     // This is a cleanup step, as we are moving to projectUserRoles
-    await this.db.delete(schema.userProjects).where(
-      and(
-        eq(schema.userProjects.userId, userId),
-        eq(schema.userProjects.projectId, createdProject.id),
-      ),
-    );
+    await this.db
+      .delete(schema.userProjects)
+      .where(
+        and(
+          eq(schema.userProjects.userId, userId),
+          eq(schema.userProjects.projectId, createdProject.id),
+        ),
+      );
 
     // 3. Create the project phases
     const phaseValues = phasesToCreate.map((phase) => ({
@@ -150,12 +154,14 @@ export class ProjectService {
       .returning();
 
     // Remove the old userProjects entry for this user and project
-    await this.db.delete(schema.userProjects).where(
-      and(
-        eq(schema.userProjects.userId, userId),
-        eq(schema.userProjects.projectId, projectId),
-      ),
-    );
+    await this.db
+      .delete(schema.userProjects)
+      .where(
+        and(
+          eq(schema.userProjects.userId, userId),
+          eq(schema.userProjects.projectId, projectId),
+        ),
+      );
 
     return newProjectUserRole;
   }
@@ -215,7 +221,10 @@ export class ProjectService {
             eq(schema.projectUserRoles.projectId, projectId),
           ),
         )
-        .leftJoin(schema.roles, eq(schema.projectUserRoles.roleId, schema.roles.id));
+        .leftJoin(
+          schema.roles,
+          eq(schema.projectUserRoles.roleId, schema.roles.id),
+        );
 
       if (
         !requesterMembership ||
@@ -287,14 +296,17 @@ export class ProjectService {
         role: true, // Include the role details
       },
     });
-    return members.map(member => ({
+    return members.map((member) => ({
       ...member.user,
       role: member.role.name, // Add the role name to the user object
     }));
   }
 
   async getProjectById(projectId: string) {
-    console.log('ProjectService.getProjectById called for projectId:', projectId);
+    console.log(
+      'ProjectService.getProjectById called for projectId:',
+      projectId,
+    );
     const project = await this.db.query.projects.findFirst({
       where: eq(schema.projects.id, projectId),
       with: {
@@ -324,7 +336,7 @@ export class ProjectService {
     const { projectUserRoles, ...restOfProject } = project;
     const projectWithMappedRoles = {
       ...restOfProject,
-      members: projectUserRoles.map(pur => ({
+      members: projectUserRoles.map((pur) => ({
         ...pur.user,
         role: pur.role.name,
       })),
