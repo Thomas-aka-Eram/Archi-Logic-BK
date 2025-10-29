@@ -53,4 +53,16 @@ export class UpdateTaskDto {
   @IsUUID()
   @IsOptional()
   assigneeId?: string;
+
+  @IsInt()
+  @IsOptional()
+  actualHours?: number;
+
+  @IsString()
+  @IsOptional()
+  completionNotes?: string;
+
+  @IsString()
+  @IsOptional()
+  commitId?: string;
 }

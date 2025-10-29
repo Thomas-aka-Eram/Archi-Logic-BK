@@ -72,6 +72,7 @@ export class TaskController {
     @Body(new ValidationPipe()) updateTaskDto: UpdateTaskDto,
     @Request() req,
   ) {
+    console.log('Received updateTask DTO:', updateTaskDto);
     const userId = req.user.userId; // Correctly access userId from req.user
     return this.taskService.updateTask(taskId, updateTaskDto, userId);
   }

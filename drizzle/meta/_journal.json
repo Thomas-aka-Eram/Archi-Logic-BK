@@ -92,6 +92,20 @@
       "when": 1759849785886,
       "tag": "0012_bumpy_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1761494384565,
+      "tag": "0013_quick_shockwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1761754170089,
+      "tag": "0014_lean_jack_power",
+      "breakpoints": true
     }
   ]
 }

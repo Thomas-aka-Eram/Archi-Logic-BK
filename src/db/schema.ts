@@ -34,7 +34,6 @@ export const users = pgTable('users', {
   // store hashed password (or empty when using SSO)
   passwordHash: text('password_hash'),
   githubAccessToken: text('github_access_token'),
-  role: varchar('role', { length: 50 }).default('Developer'), // global role
   timezone: varchar('timezone', { length: 50 }).default('UTC'),
   language: varchar('language', { length: 10 }).default('en'),
   theme: varchar('theme', { length: 20 }).default('system'), // light, dark, system
@@ -340,6 +339,8 @@ export const tasks = pgTable(
     priority: varchar('priority', { length: 20 }).default('MEDIUM'),
     dueDate: timestamp('due_date'),
     estimateHours: integer('estimate_hours'),
+    actualHours: integer('actual_hours'),
+    completionNotes: text('completion_notes'),
     domainId: uuid('domain_id').references(() => domains.id),
     phaseId: uuid('phase_id').references(() => projectPhases.id),
     createdAt: timestamp('created_at').defaultNow(),
