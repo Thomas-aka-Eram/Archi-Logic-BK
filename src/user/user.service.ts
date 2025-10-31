@@ -214,4 +214,23 @@ export class UserService {
     }
     return updatedPreferences;
   }
+
+  async getUserById(userId: string) {
+    this.logger.log(`Fetching user by ID: ${userId}`);
+    const user = await this.db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      this.logger.warn(`User with ID ${userId} not found.`);
+      return null;
+    }
+
+    return user;
+  }
 }

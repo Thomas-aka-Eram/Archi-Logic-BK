@@ -14,11 +14,44 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddTaskDependencyDto } from './dto/add-task-dependency.dto';
 import { GetAssignmentSuggestionsDto } from './dto/get-assignment-suggestions.dto';
 import { GetUnassignedTasksDto } from './dto/get-unassigned-tasks.dto';
+import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { and, eq, inArray, sql, notExists, ne, notInArray } from 'drizzle-orm';
+import { TaskReviewService } from '../review/task.review.service';
 
 @Injectable()
 export class TaskService {
-  constructor(@Inject(DB) private readonly db: DbType) {}
+  constructor(
+    @Inject(DB) private readonly db: DbType,
+    private readonly taskReviewService: TaskReviewService,
+  ) {}
+
+  async addFeedback(
+    taskId: string,
+    userId: string,
+    createFeedbackDto: CreateFeedbackDto,
+  ) {
+    const task = await this.db.query.tasks.findFirst({
+      where: eq(schema.tasks.id, taskId),
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    // TODO: Add authorization check to ensure user can add feedback
+
+    const [newFeedback] = await this.db
+      .insert(schema.feedback)
+      .values({
+        taskId,
+        userId,
+        projectId: task.projectId,
+        comments: createFeedbackDto.comments,
+      })
+      .returning();
+
+    return newFeedback;
+  }
 
   async createTask(
     projectId: string,
@@ -185,6 +218,7 @@ export class TaskService {
             tag: true,
           },
         },
+        feedback: true,
       },
       orderBy: (task, { desc }) => [desc(task.createdAt)],
     });
@@ -212,6 +246,7 @@ export class TaskService {
         },
         domain: true,
         phase: true,
+        feedback: true,
       },
     });
 
@@ -240,42 +275,30 @@ export class TaskService {
 
     return this.db.transaction(async (tx) => {
       if (updateTaskDto.status === 'COMPLETED') {
-        const { actualHours, completionNotes, commitId } = updateTaskDto;
-        if (commitId) {
-          if (!actualHours || !completionNotes) {
-            throw new BadRequestException(
-              'Actual hours and completion notes are required to complete a task with a commit.',
-            );
-          }
+        await tx
+          .update(schema.tasks)
+          .set({ status: 'IN_REVIEW', updatedAt: new Date() })
+          .where(eq(schema.tasks.id, taskId));
 
-          const repository = await tx.query.repositories.findFirst({
-            where: eq(schema.repositories.projectId, task.projectId),
-          });
+        const existingReview = await tx.query.taskReviews.findFirst({
+          where: and(
+            eq(schema.taskReviews.taskId, taskId),
+            eq(schema.taskReviews.status, 'CHANGES_REQUESTED'),
+          ),
+        });
 
-          if (!repository) {
-            throw new NotFoundException(
-              'No repository found for the project associated with this task.',
-            );
-          }
-
-          const [commit] = await tx
-            .insert(schema.commits)
-            .values({
-              commitHash: commitId,
-              message: `Completed task #${taskId}`,
-              repoId: repository.id,
-              projectId: task.projectId,
-              committedAt: new Date(),
-            })
-            .returning();
-
+        if (existingReview) {
           await tx
-            .insert(schema.taskCommits)
-            .values({ taskId, commitId: commit.id });
+            .update(schema.taskReviews)
+            .set({ status: 'PENDING', respondedAt: null })
+            .where(eq(schema.taskReviews.id, existingReview.id));
+        } else {
+          await tx.insert(schema.taskReviews).values({
+            taskId,
+            requesterId: userId,
+          });
         }
-      }
-
-      if (Object.keys(rest).length > 0 || dueDate) {
+      } else if (Object.keys(rest).length > 0 || dueDate) {
         await tx
           .update(schema.tasks)
           .set({

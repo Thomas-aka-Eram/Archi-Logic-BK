@@ -7,8 +7,10 @@ import {
   IsArray,
   ValidateNested,
   IsUUID,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { taskStatusEnum } from '../../db/schema';
 
 class AssignmentDto {
   @IsUUID()
@@ -28,9 +30,9 @@ export class UpdateTaskDto {
   @IsOptional()
   description?: string;
 
-  @IsString()
   @IsOptional()
-  status?: string;
+  @IsIn(taskStatusEnum.enumValues)
+  status?: (typeof taskStatusEnum.enumValues)[number];
 
   @IsString()
   @IsOptional()

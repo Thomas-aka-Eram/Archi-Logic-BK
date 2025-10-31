@@ -11,6 +11,7 @@ import {
   unique,
   customType,
   serial,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -324,6 +325,16 @@ export const blockTags = pgTable(
  * ===========================
  */
 
+export const taskStatusEnum = pgEnum('task_status', [
+  'OPEN',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'BLOCKED',
+  'IN_REVIEW',
+  'APPROVED',
+  'REWORK_REQUESTED',
+]);
+
 // Tasks
 export const tasks = pgTable(
   'tasks',
@@ -335,7 +346,7 @@ export const tasks = pgTable(
       .notNull(),
     title: varchar('title', { length: 300 }).notNull(),
     description: text('description'),
-    status: varchar('status', { length: 50 }).default('OPEN'), // OPEN, IN_PROGRESS, COMPLETED, BLOCKED
+    status: taskStatusEnum('status').default('OPEN'),
     priority: varchar('priority', { length: 20 }).default('MEDIUM'),
     dueDate: timestamp('due_date'),
     estimateHours: integer('estimate_hours'),
@@ -582,6 +593,23 @@ export const reviewRequests = pgTable(
   (t) => ({ reviewBlockIdx: index('review_requests_block_idx').on(t.blockId) }),
 );
 
+// task_reviews: review workflow for tasks
+export const taskReviews = pgTable(
+  'task_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .references(() => tasks.id, { onDelete: 'cascade' })
+      .notNull(),
+    requesterId: uuid('requester_id').references(() => users.id),
+    reviewerId: uuid('reviewer_id').references(() => users.id),
+    status: varchar('status', { length: 30 }).default('PENDING'), // PENDING, APPROVED, CHANGES_REQUESTED
+    createdAt: timestamp('created_at').defaultNow(),
+    respondedAt: timestamp('responded_at'),
+  },
+  (t) => ({ reviewTaskIdx: index('task_reviews_task_idx').on(t.taskId) }),
+);
+
 // feedback (optional)
 export const feedback = pgTable(
   'feedback',
@@ -593,6 +621,9 @@ export const feedback = pgTable(
     projectId: uuid('project_id')
       .references(() => projects.id)
       .notNull(),
+    taskId: uuid('task_id').references(() => tasks.id, {
+      onDelete: 'cascade',
+    }),
     rating: integer('rating'),
     comments: text('comments'),
     createdAt: timestamp('created_at').defaultNow(),
@@ -872,6 +903,8 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   dependents: many(taskDependencies, { relationName: 'task_dependents' }),
   tags: many(taskTags),
   commits: many(taskCommits),
+  reviews: many(taskReviews),
+  feedback: many(feedback),
 }));
 
 export const userTasksRelations = relations(userTasks, ({ one }) => ({
@@ -946,6 +979,23 @@ export const taskCommitsRelations = relations(taskCommits, ({ one }) => ({
   }),
 }));
 
+export const taskReviewsRelations = relations(taskReviews, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskReviews.taskId],
+    references: [tasks.id],
+  }),
+  requester: one(users, {
+    fields: [taskReviews.requesterId],
+    references: [users.id],
+    relationName: 'task_review_requester',
+  }),
+  reviewer: one(users, {
+    fields: [taskReviews.reviewerId],
+    references: [users.id],
+    relationName: 'task_review_reviewer',
+  }),
+}));
+
 export const reviewRequestsRelations = relations(reviewRequests, ({ one }) => ({
   block: one(blocks, {
     fields: [reviewRequests.blockId],
@@ -960,6 +1010,21 @@ export const reviewRequestsRelations = relations(reviewRequests, ({ one }) => ({
     fields: [reviewRequests.reviewerId],
     references: [users.id],
     relationName: 'review_reviewer',
+  }),
+}));
+
+export const feedbackRelations = relations(feedback, ({ one }) => ({
+  user: one(users, {
+    fields: [feedback.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [feedback.projectId],
+    references: [projects.id],
+  }),
+  task: one(tasks, {
+    fields: [feedback.taskId],
+    references: [tasks.id],
   }),
 }));
 

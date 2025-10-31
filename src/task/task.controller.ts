@@ -18,11 +18,25 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddTaskDependencyDto } from './dto/add-task-dependency.dto';
 import { GetUnassignedTasksDto } from './dto/get-unassigned-tasks.dto';
 import { AssignUsersDto } from './dto/assign-users.dto';
+import { CreateFeedbackDto } from './dto/create-feedback.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
+
+  @Post(':id/feedback')
+  async addFeedback(
+    @Param('id', ParseUUIDPipe) taskId: string,
+    @Body(new ValidationPipe()) createFeedbackDto: CreateFeedbackDto,
+    @Request() req,
+  ) {
+    return this.taskService.addFeedback(
+      taskId,
+      req.user.userId,
+      createFeedbackDto,
+    );
+  }
 
   @Get(':id/recommendations')
   async getRecommendations(@Param('id', ParseUUIDPipe) taskId: string) {
