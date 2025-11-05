@@ -17,12 +17,14 @@ import { GetUnassignedTasksDto } from './dto/get-unassigned-tasks.dto';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { and, eq, inArray, sql, notExists, ne, notInArray } from 'drizzle-orm';
 import { TaskReviewService } from '../review/task.review.service';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class TaskService {
   constructor(
     @Inject(DB) private readonly db: DbType,
     private readonly taskReviewService: TaskReviewService,
+    private readonly activityService: ActivityService,
   ) {}
 
   async addFeedback(
@@ -133,6 +135,16 @@ export class TaskService {
         await tx.insert(schema.taskDependencies).values(dependencyValues);
       }
 
+      await this.activityService.log({
+        userId,
+        projectId,
+        action: 'CREATE_TASK',
+        entity: 'TASK',
+        entityId: createdTask.id,
+        description: `Task "${createdTask.title}" created`,
+        newValues: createTaskDto,
+      });
+
       return await tx.query.tasks.findFirst({
         where: eq(schema.tasks.id, createdTask.id),
         with: {
@@ -198,9 +210,19 @@ export class TaskService {
     return unassignedTasks;
   }
 
-  async getTasksForProject(projectId: string) {
+  async getTasksForProject(projectId: string, assigneeId?: string) {
+    const whereClauses = [eq(schema.tasks.projectId, projectId)];
+
+    if (assigneeId) {
+      const assignedTaskIds = this.db
+        .select({ id: schema.userTasks.taskId })
+        .from(schema.userTasks)
+        .where(eq(schema.userTasks.userId, assigneeId));
+      whereClauses.push(inArray(schema.tasks.id, assignedTaskIds));
+    }
+
     return await this.db.query.tasks.findMany({
-      where: eq(schema.tasks.projectId, projectId),
+      where: and(...whereClauses),
       with: {
         assignees: {
           with: {
@@ -262,19 +284,75 @@ export class TaskService {
     updateTaskDto: UpdateTaskDto,
     userId: string,
   ) {
-    const { dueDate, assignees, assigneeId, ...rest } = updateTaskDto;
+    console.log(`[updateTask] Initiating update for task ${taskId} by user ${userId}`);
+    console.log(`[updateTask] Raw DTO:`, updateTaskDto);
+    console.log(`[updateTask] DTO:`, updateTaskDto);
 
-    // TODO: Implement proper role-based access control for task updates
+    const { status, ...otherUpdates } = updateTaskDto;
+
     const task = await this.db.query.tasks.findFirst({
       where: eq(schema.tasks.id, taskId),
+      with: {
+        assignees: true,
+      },
     });
 
     if (!task) {
+      console.error(`[updateTask] Task not found: ${taskId}`);
       throw new NotFoundException('Task not found');
     }
+    console.log(`[updateTask] Found task. Project ID: ${task.projectId}`);
+
+    const projectMembership = await this.db.query.projectUserRoles.findFirst({
+      where: and(
+        eq(schema.projectUserRoles.userId, userId),
+        eq(schema.projectUserRoles.projectId, task.projectId),
+      ),
+      with: {
+        role: true,
+      },
+    });
+
+    if (!projectMembership || !projectMembership.role) {
+      console.error(`[updateTask] User ${userId} does not have a role in project ${task.projectId}. Please assign a role to the user in the project settings.`);
+      throw new ForbiddenException('You do not have a role in this project. Please contact an administrator.');
+    }
+
+    const userRole = projectMembership.role.name;
+    console.log(`[updateTask] User role: ${userRole}`);
+
+    const isAssignee = task.assignees.some(
+      (assignee) => assignee.userId === userId,
+    );
+
+    const adminOnlyFields: (keyof UpdateTaskDto)[] = ['title', 'description', 'priority', 'estimateHours', 'dueDate', 'assignees', 'assigneeId'];
+    const assigneeAllowedFields: (keyof UpdateTaskDto)[] = ['status', 'actualHours', 'completionNotes', 'commitId'];
+
+    const requestedUpdates = Object.keys(updateTaskDto).filter(key => updateTaskDto[key] !== undefined);
+
+    if (!['Admin', 'Manager'].includes(userRole)) {
+      const hasAdminOnlyUpdates = requestedUpdates.some(key => adminOnlyFields.includes(key as keyof UpdateTaskDto));
+      if (hasAdminOnlyUpdates) {
+        throw new ForbiddenException('You do not have permission to edit these task details.');
+      }
+
+      const hasAssigneeAllowedUpdates = requestedUpdates.some(key => assigneeAllowedFields.includes(key as keyof UpdateTaskDto));
+      if (hasAssigneeAllowedUpdates && !isAssignee) {
+        throw new ForbiddenException('Only assignees can update these task details.');
+      }
+    }
+
+    // Rule 3: If there are no changes, do nothing.
+    if (requestedUpdates.length === 0) {
+      console.log('[updateTask] No changes detected. Aborting transaction.');
+      return task;
+    }
+
+    console.log('[updateTask] Auth checks passed. Proceeding with transaction.');
+    const oldStatus = task.status;
 
     return this.db.transaction(async (tx) => {
-      if (updateTaskDto.status === 'COMPLETED') {
+      if (status === 'COMPLETED') {
         await tx
           .update(schema.tasks)
           .set({ status: 'IN_REVIEW', updatedAt: new Date() })
@@ -298,32 +376,56 @@ export class TaskService {
             requesterId: userId,
           });
         }
-      } else if (Object.keys(rest).length > 0 || dueDate) {
+
+        await this.activityService.log({
+          userId,
+          projectId: task.projectId,
+          action: 'SUBMIT_FOR_REVIEW',
+          entity: 'TASK',
+          entityId: taskId,
+          description: `Task "${task.title}" submitted for review`,
+          oldValues: { status: oldStatus },
+          newValues: { status: 'IN_REVIEW' },
+        });
+      } else if (status || Object.keys(otherUpdates).length > 0) {
+        const { dueDate, ...restOfOtherUpdates } = otherUpdates;
         await tx
           .update(schema.tasks)
           .set({
-            ...rest,
+            ...restOfOtherUpdates,
             dueDate: dueDate ? new Date(dueDate) : undefined,
+            status: status,
             updatedAt: new Date(),
           })
           .where(eq(schema.tasks.id, taskId));
+
+        await this.activityService.log({
+          userId,
+          projectId: task.projectId,
+          action: 'UPDATE_TASK',
+          entity: 'TASK',
+          entityId: taskId,
+          description: `Task "${task.title}" updated`,
+          oldValues: task,
+          newValues: updateTaskDto,
+        });
       }
 
-      if (assigneeId) {
+      if (otherUpdates.assigneeId) {
         await tx
           .delete(schema.userTasks)
           .where(eq(schema.userTasks.taskId, taskId));
         await this.assignMultipleUsers(
           taskId,
-          [{ userId: assigneeId, role: 'developer' }],
+          [{ userId: otherUpdates.assigneeId, role: 'developer' }],
           tx,
         );
-      } else if (assignees) {
+      } else if (otherUpdates.assignees) {
         await tx
           .delete(schema.userTasks)
           .where(eq(schema.userTasks.taskId, taskId));
-        if (assignees.length > 0) {
-          await this.assignMultipleUsers(taskId, assignees, tx);
+        if (otherUpdates.assignees.length > 0) {
+          await this.assignMultipleUsers(taskId, otherUpdates.assignees, tx);
         }
       }
 
@@ -444,10 +546,12 @@ export class TaskService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    let suggestions = await Promise.all(
+    const suggestions = await Promise.all(
       projectDevelopers.map(async (member) => {
         const userId = member.user.id;
-        console.log(`\nCalculating score for user: ${member.user.name} (${userId})`);
+        console.log(
+          `\nCalculating score for user: ${member.user.name} (${userId})`,
+        );
 
         const activeTasks = await this.db
           .select({ count: sql`count(*)` })
@@ -488,7 +592,7 @@ export class TaskService {
           .where(
             and(
               eq(schema.commits.projectId, projectId),
-              eq(schema.commits.authorEmail, member.user.email!),
+              eq(schema.commits.authorEmail, member.user.email),
               sql`(${schema.commits.committedAt} > ${thirtyDaysAgo})`,
             ),
           );

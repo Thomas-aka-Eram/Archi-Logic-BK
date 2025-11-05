@@ -6,47 +6,50 @@ import {
   ValidationPipe,
   Request,
   ParseUUIDPipe,
+  UseGuards,
+  Get,
 } from '@nestjs/common';
-import { ReviewService } from './review.service';
-import { RequestReviewDto } from './dto/request-review.dto';
+import { TaskReviewService } from './task.review.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('reviews')
 export class ReviewController {
-  constructor(private readonly reviewService: ReviewService) {}
+  constructor(private readonly taskReviewService: TaskReviewService) {}
 
-  @Post('/block/:blockGroupId/request')
-  async requestReview(
-    @Param('blockGroupId', ParseUUIDPipe) blockGroupId: string,
-    @Body(new ValidationPipe()) requestReviewDto: RequestReviewDto,
-    @Request() req,
+  @Get('queue')
+  async getReviewQueue(@Request() req) {
+    return this.taskReviewService.getReviewQueue(req.user.id);
+  }
+
+  @Get('project/:projectId')
+  async getReviews(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body('status') status: string,
   ) {
-    // const userId = req.user.id;
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-    return this.reviewService.requestReview(
-      blockGroupId,
-      requestReviewDto,
-      mockUserId,
-    );
+    return this.taskReviewService.getReviews(projectId, status);
   }
 
   @Post(':reviewId/approve')
-  async approveReview(
+  async approveTaskReview(
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
-    @Request() req,
   ) {
-    // const userId = req.user.id;
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-    return this.reviewService.approveReview(reviewId, mockUserId);
+    return this.taskReviewService.approveReview(reviewId);
   }
 
   @Post(':reviewId/request-changes')
-  async requestChanges(
+  async requestTaskChanges(
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
-    @Body('message') message: string,
-    @Request() req,
+    @Body('comments') comments: string,
   ) {
-    // const userId = req.user.id;
-    const mockUserId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-    return this.reviewService.requestChanges(reviewId, message, mockUserId);
+    return this.taskReviewService.requestChanges(reviewId, comments);
+  }
+
+  @Post(':reviewId/assign')
+  async assignReviewer(
+    @Param('reviewId', ParseUUIDPipe) reviewId: string,
+    @Body('reviewerId') reviewerId: string,
+  ) {
+    return this.taskReviewService.assignReviewer(reviewId, reviewerId);
   }
 }

@@ -44,7 +44,7 @@ export class ProjectController {
     return this.documentService.createDocument(
       projectId,
       createDocumentDto,
-      req.user.userId,
+      req.user.id,
     );
   }
 
@@ -69,7 +69,7 @@ export class ProjectController {
   @UseGuards(JwtAuthGuard)
   async getProjects(@Request() req) {
     console.log('GET /api/projects received');
-    const userId = req.user.userId;
+    const userId = req.user.id;
     console.log('Authenticated userId for getProjects:', userId);
     const projects = await this.projectService.getProjectsForUser(userId);
     console.log('Returning projects for user:', projects);
@@ -84,7 +84,7 @@ export class ProjectController {
   ) {
     console.log('POST /api/projects received');
     console.log('Request body:', createProjectDto);
-    const userId = req.user.userId; // Use the authenticated userId
+    const userId = req.user.id; // Use the authenticated userId
     console.log('Authenticated userId:', userId);
     return this.projectService.createProject(createProjectDto, userId);
   }
@@ -113,7 +113,7 @@ export class ProjectController {
     @Body(new ValidationPipe()) updateMemberRoleDto: UpdateMemberRoleDto,
   ) {
     return this.projectService.updateMemberRole(
-      req.user.userId,
+      req.user.id,
       projectId,
       targetUserId,
       updateMemberRoleDto.role,

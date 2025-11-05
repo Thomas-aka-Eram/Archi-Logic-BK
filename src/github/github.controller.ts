@@ -57,7 +57,7 @@ export class GithubController {
   @UseGuards(AuthGuard('jwt'))
   async getUserRepos(@Req() req) {
     console.log('getUserRepos req.user:', req.user);
-    return this.githubService.getUserRepos(req.user.userId);
+    return this.githubService.getUserRepos(req.user.id);
   }
 
   @Get('/projects/:projectId/integration/github')
@@ -81,7 +81,7 @@ export class GithubController {
     @Body('repoName') repoName: string,
     @Req() req,
   ) {
-    return this.githubService.linkRepo(projectId, repoName, req.user.userId);
+    return this.githubService.linkRepo(projectId, repoName, req.user.id);
   }
 
   @Get('/projects/:projectId/github/commits')

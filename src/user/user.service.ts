@@ -109,21 +109,21 @@ export class UserService {
     return undefined;
   }
 
-  async updateGithubAccessToken(userId: string, accessToken: string) {
-    this.logger.log(`Updating github access token for user ID: ${userId}`);
+  async updateGithubAccessToken(id: string, accessToken: string) {
+    this.logger.log(`Updating github access token for user ID: ${id}`);
     await this.db
       .update(schema.users)
       .set({
         githubAccessToken: accessToken,
         updatedAt: new Date(),
       })
-      .where(eq(schema.users.id, userId));
+      .where(eq(schema.users.id, id));
   }
 
-  async getProfile(userId: string) {
-    this.logger.log(`Fetching profile for user ID: ${userId}`);
+  async getProfile(id: string) {
+    this.logger.log(`Fetching profile for user ID: ${id}`);
     const userProfile = await this.db.query.users.findFirst({
-      where: eq(schema.users.id, userId),
+      where: eq(schema.users.id, id),
       columns: {
         id: true,
         email: true,
@@ -140,19 +140,16 @@ export class UserService {
     return userProfile;
   }
 
-  async updateProfile(userId: string, updateData: UpdateUserProfileDto) {
-    this.logger.log(`Updating profile for user ID: ${userId}`);
-    const { fullName, email, ...rest } = updateData;
+  async updateProfile(id: string, updateData: UpdateUserProfileDto) {
+    this.logger.log(`Updating profile for user ID: ${id}`);
 
     const [updatedUser] = await this.db
       .update(schema.users)
       .set({
-        ...(fullName && { name: fullName }),
-        ...(email && { email }),
-        ...rest,
+        ...updateData,
         updatedAt: new Date(), // Assuming updatedAt exists in schema, add if not
       })
-      .where(eq(schema.users.id, userId))
+      .where(eq(schema.users.id, id))
       .returning({
         id: schema.users.id,
         email: schema.users.email,
@@ -170,10 +167,10 @@ export class UserService {
     return updatedUser;
   }
 
-  async getNotificationPreferences(userId: string) {
-    this.logger.log(`Fetching notification preferences for user ID: ${userId}`);
+  async getNotificationPreferences(id: string) {
+    this.logger.log(`Fetching notification preferences for user ID: ${id}`);
     const userPreferences = await this.db.query.users.findFirst({
-      where: eq(schema.users.id, userId),
+      where: eq(schema.users.id, id),
       columns: {
         emailNotifications: true,
         taskAssignments: true,
@@ -189,17 +186,17 @@ export class UserService {
   }
 
   async updateNotificationPreferences(
-    userId: string,
+    id: string,
     updateData: UpdateNotificationPreferencesDto,
   ) {
-    this.logger.log(`Updating notification preferences for user ID: ${userId}`);
+    this.logger.log(`Updating notification preferences for user ID: ${id}`);
     const [updatedPreferences] = await this.db
       .update(schema.users)
       .set({
         ...updateData,
         updatedAt: new Date(), // Assuming updatedAt exists in schema, add if not
       })
-      .where(eq(schema.users.id, userId))
+      .where(eq(schema.users.id, id))
       .returning({
         emailNotifications: schema.users.emailNotifications,
         taskAssignments: schema.users.taskAssignments,
@@ -215,10 +212,10 @@ export class UserService {
     return updatedPreferences;
   }
 
-  async getUserById(userId: string) {
-    this.logger.log(`Fetching user by ID: ${userId}`);
+  async getUserById(id: string) {
+    this.logger.log(`Fetching user by ID: ${id}`);
     const user = await this.db.query.users.findFirst({
-      where: eq(schema.users.id, userId),
+      where: eq(schema.users.id, id),
       columns: {
         id: true,
         name: true,
@@ -227,7 +224,7 @@ export class UserService {
     });
 
     if (!user) {
-      this.logger.warn(`User with ID ${userId} not found.`);
+      this.logger.warn(`User with ID ${id} not found.`);
       return null;
     }
 

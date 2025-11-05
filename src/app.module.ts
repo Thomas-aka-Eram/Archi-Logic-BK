@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { DrizzleModule } from './db/drizzle.module';
 import { UserModule } from './user/user.module';
 import { ProjectModule } from './project/project.module';
 import { DocumentModule } from './document/document.module';
@@ -16,13 +15,15 @@ import { SearchModule } from './search/search.module';
 import { InvitationModule } from './invitation/invitation.module';
 import { DomainModule } from './domain/domain.module';
 import { GithubModule } from './github/github.module';
+import { ActivityModule } from './activity/activity.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DrizzleModule,
     UserModule,
     ProjectModule,
     DocumentModule,
@@ -36,6 +37,9 @@ import { GithubModule } from './github/github.module';
     InvitationModule,
     DomainModule,
     GithubModule,
+    ActivityModule,
+    DashboardModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

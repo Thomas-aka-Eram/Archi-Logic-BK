@@ -10,10 +10,14 @@ import { CreateInvitationDto } from './dto/create-invitation.dto';
 import * as crypto from 'crypto';
 import { and, eq } from 'drizzle-orm';
 import * as schema from '../db/schema';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class InvitationService {
-  constructor(@Inject(DB) private readonly db: DbType) {}
+  constructor(
+    @Inject(DB) private readonly db: DbType,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async create(
     requestingUserId: string,
@@ -95,7 +99,7 @@ export class InvitationService {
         })
         .returning();
 
-      await tx.insert(schema.activityLogs).values({
+      await this.activityService.log({
         userId: requestingUserId,
         projectId,
         action: 'INVITE_CREATED',
@@ -201,7 +205,7 @@ export class InvitationService {
         })
         .where(eq(schema.invitations.id, invitation.id));
 
-      await tx.insert(schema.activityLogs).values({
+      await this.activityService.log({
         userId: joiningUserId,
         projectId: invitation.projectId,
         action: 'INVITE_USED',
@@ -259,7 +263,7 @@ export class InvitationService {
         .set({ status: 'revoked' })
         .where(eq(schema.invitations.id, invitationId));
 
-      await tx.insert(schema.activityLogs).values({
+      await this.activityService.log({
         userId: requestingUserId,
         projectId: invitation.projectId,
         action: 'INVITE_REVOKED',

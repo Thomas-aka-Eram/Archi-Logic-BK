@@ -62,4 +62,14 @@ export class AuthService {
     const user = await this.userService.createUser(createUserDto);
     return this.login(user);
   }
+
+  async getProfile(id: string) {
+    this.logger.log(`Fetching profile for user ID: ${id}`);
+    // Use the UserService to get the latest user data
+    const user = await this.userService.getProfile(id);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
+  }
 }

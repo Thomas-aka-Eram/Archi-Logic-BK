@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import {
   drizzle,
   NodePgDatabase,
@@ -15,6 +15,7 @@ export type TransactionType = NodePgTransaction<
   ExtractTablesWithRelations<typeof schema>
 >;
 
+@Global()
 @Module({
   providers: [
     {

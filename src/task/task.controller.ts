@@ -33,7 +33,7 @@ export class TaskController {
   ) {
     return this.taskService.addFeedback(
       taskId,
-      req.user.userId,
+      req.user.id,
       createFeedbackDto,
     );
   }
@@ -55,7 +55,7 @@ export class TaskController {
     return this.taskService.createTask(
       projectId,
       createTaskDto,
-      req.user.userId,
+      req.user.id,
     );
   }
 
@@ -71,8 +71,9 @@ export class TaskController {
   @Get('/project/:projectId')
   async getTasksForProject(
     @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('assigneeId') assigneeId?: string,
   ) {
-    return this.taskService.getTasksForProject(projectId);
+    return this.taskService.getTasksForProject(projectId, assigneeId);
   }
 
   @Get(':id')
@@ -87,7 +88,7 @@ export class TaskController {
     @Request() req,
   ) {
     console.log('Received updateTask DTO:', updateTaskDto);
-    const userId = req.user.userId; // Correctly access userId from req.user
+    const userId = req.user.id; // Changed from req.user.userId to req.user.id
     return this.taskService.updateTask(taskId, updateTaskDto, userId);
   }
 

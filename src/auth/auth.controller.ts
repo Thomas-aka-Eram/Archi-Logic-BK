@@ -31,6 +31,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {
-    return req.user;
+    // The req.user object is from the JWT payload. We use its ID to get fresh data.
+    return this.authService.getProfile(req.user.id);
   }
 }

@@ -28,9 +28,7 @@ export class DocumentController {
 
   @Get('related')
   @UseGuards(JwtAuthGuard)
-  async findRelatedDocuments(
-    @Query() query: FindRelatedDocumentsDto,
-  ) {
+  async findRelatedDocuments(@Query() query: FindRelatedDocumentsDto) {
     console.log('Received query in controller:', query);
     const { domainId, tagIds } = query;
     console.log(`Controller received domainId: ${domainId}`);

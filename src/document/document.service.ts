@@ -11,15 +11,26 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { AddBlockDto } from './dto/add-block.dto';
 import { UpdateBlockDto } from './dto/update-block.dto';
 import { and, eq, inArray, desc, asc } from 'drizzle-orm';
-
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class DocumentService {
-  constructor(@Inject(DB) private readonly db: DbType) {}
+  constructor(
+    @Inject(DB) private readonly db: DbType,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async updateDocument(docId: string, updateDocumentDto: UpdateDocumentDto) {
     const { name } = updateDocumentDto;
+
+    const doc = await this.db.query.documents.findFirst({
+      where: eq(schema.documents.id, docId),
+    });
+
+    if (!doc) {
+      throw new NotFoundException('Document not found.');
+    }
 
     const [updatedDocument] = await this.db
       .update(schema.documents)
@@ -27,9 +38,16 @@ export class DocumentService {
       .where(eq(schema.documents.id, docId))
       .returning();
 
-    if (!updatedDocument) {
-      throw new NotFoundException('Document not found.');
-    }
+    await this.activityService.log({
+      userId: doc.createdBy,
+      projectId: doc.projectId,
+      action: 'UPDATE_DOCUMENT',
+      entity: 'DOCUMENT',
+      entityId: docId,
+      description: `Document "${doc.title}" updated`,
+      oldValues: { title: doc.title },
+      newValues: { title: name },
+    });
 
     return updatedDocument;
   }
@@ -64,13 +82,42 @@ export class DocumentService {
         createdBy: userId,
       })
       .returning();
+
+    await this.activityService.log({
+      userId,
+      projectId,
+      action: 'CREATE_DOCUMENT',
+      entity: 'DOCUMENT',
+      entityId: newDocument.id,
+      description: `Document "${newDocument.title}" created`,
+      newValues: createDocumentDto,
+    });
+
     return newDocument;
   }
 
   async deleteDocument(docId: string) {
+    const doc = await this.db.query.documents.findFirst({
+      where: eq(schema.documents.id, docId),
+    });
+
+    if (!doc) {
+      throw new NotFoundException('Document not found.');
+    }
+
     await this.db
       .delete(schema.documents)
       .where(eq(schema.documents.id, docId));
+
+    await this.activityService.log({
+      userId: doc.createdBy,
+      projectId: doc.projectId,
+      action: 'DELETE_DOCUMENT',
+      entity: 'DOCUMENT',
+      entityId: docId,
+      description: `Document "${doc.title}" deleted`,
+    });
+
     return { message: 'Document deleted successfully' };
   }
 
@@ -201,6 +248,24 @@ export class DocumentService {
         },
       });
 
+      const doc = await tx.query.documents.findFirst({
+        where: eq(schema.documents.id, documentId),
+      });
+
+      if (!doc) {
+        throw new NotFoundException('Document not found.');
+      }
+
+      await this.activityService.log({
+        userId,
+        projectId: doc.projectId,
+        action: 'ADD_BLOCK',
+        entity: 'DOCUMENT',
+        entityId: documentId,
+        description: `Block added to document "${doc.title}"`,
+        newValues: { type, content },
+      });
+
       return newBlock;
     });
     return newBlock;
@@ -282,6 +347,25 @@ export class DocumentService {
             },
           },
         },
+      });
+
+      const doc = await tx.query.documents.findFirst({
+        where: eq(schema.documents.id, currentRow.documentId),
+      });
+
+      if (!doc) {
+        throw new NotFoundException('Document not found.');
+      }
+
+      await this.activityService.log({
+        userId,
+        projectId: doc.projectId,
+        action: 'UPDATE_BLOCK',
+        entity: 'DOCUMENT',
+        entityId: currentRow.documentId,
+        description: `Block updated in document "${doc.title}"`,
+        oldValues: { content: currentRow.content },
+        newValues: { content },
       });
 
       return updatedBlock;

@@ -4,9 +4,10 @@ import { ReviewService } from './review.service';
 import { DrizzleModule } from '../db/drizzle.module';
 import { TaskReviewController } from './task.review.controller';
 import { TaskReviewService } from './task.review.service';
+import { ActivityModule } from '../activity/activity.module';
 
 @Module({
-  imports: [DrizzleModule],
+  imports: [DrizzleModule, ActivityModule],
   controllers: [ReviewController, TaskReviewController],
   providers: [ReviewService, TaskReviewService],
   exports: [TaskReviewService],
