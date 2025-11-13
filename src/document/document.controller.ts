@@ -76,7 +76,7 @@ export class DocumentController {
     @Request() req,
   ) {
     console.log('addBlock DTO:', JSON.stringify(addBlockDto, null, 2));
-    return this.documentService.addBlock(docId, addBlockDto, req.user.userId);
+    return this.documentService.addBlock(docId, addBlockDto, req.user.id);
   }
 
   @Patch('blocks/:blockGroupId')
@@ -90,7 +90,7 @@ export class DocumentController {
     return this.documentService.updateBlock(
       blockGroupId,
       updateBlockDto,
-      req.user.userId,
+      req.user.id,
     );
   }
 

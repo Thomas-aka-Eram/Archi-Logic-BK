@@ -199,6 +199,7 @@ export class DocumentService {
   }
 
   async addBlock(documentId: string, addBlockDto: AddBlockDto, userId: string) {
+    console.log(userId, "HELLO find me here I'm passed correctly if not undenfined");
     const { type, content, tags, domains } = addBlockDto;
 
     const newBlock = await this.db.transaction(async (tx) => {
@@ -276,6 +277,7 @@ export class DocumentService {
     updateBlockDto: UpdateBlockDto,
     userId: string,
   ) {
+    console.log(userId, "HELLO find me here I'm passed correctly if not undenfined");
     const { content, expectedVersion, tags, domains } = updateBlockDto;
 
     const updatedBlock = await this.db.transaction(async (tx) => {

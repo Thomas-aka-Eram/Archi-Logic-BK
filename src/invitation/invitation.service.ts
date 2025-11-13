@@ -36,6 +36,7 @@ export class InvitationService {
       },
     });
 
+    console.log('projectMembership', projectMembership);
     const requestingUserRole = projectMembership?.role?.name;
     const invitedRole = roleOnJoin || 'Developer'; // Default role if not specified
 
@@ -234,24 +235,39 @@ export class InvitationService {
         throw new NotFoundException('Invitation not found.');
       }
 
-      const [projectMembership] = await tx
-        .select()
-        .from(schema.userProjects)
-        .where(
-          and(
-            eq(schema.userProjects.userId, requestingUserId),
-            eq(schema.userProjects.projectId, invitation.projectId),
-          ),
-        );
+      // Use projectUserRoles + roles (consistent with create)
+      const requesterMembership = await tx.query.projectUserRoles.findFirst({
+        where: and(
+          eq(schema.projectUserRoles.userId, requestingUserId),
+          eq(schema.projectUserRoles.projectId, invitation.projectId),
+        ),
+        with: { role: true },
+      });
 
-      if (
-        !projectMembership ||
-        !projectMembership.role ||
-        !['Owner', 'Manager'].includes(projectMembership.role)
-      ) {
-        throw new ForbiddenException(
-          'You do not have permission to revoke schema.invitations for this project.',
-        );
+      const roleName = requesterMembership?.role?.name;
+      if (!roleName) {
+        throw new ForbiddenException('You do not have a valid role in this project.');
+      }
+
+      // Normalize role and apply hierarchy
+      const normalizedRole = roleName.trim().toLowerCase();
+      const ROLE_HIERARCHY: Record<string, number> = {
+        admin: 3,
+        manager: 2,
+        owner: 3,        // include if present in your seed
+        developer: 1,
+        viewer: 1,
+        contributor: 1,
+        qa: 1,
+        bot: 1,
+      };
+
+      const level = ROLE_HIERARCHY[normalizedRole];
+      if (level === undefined) {
+        throw new ForbiddenException('Your role is not recognized in the system.');
+      }
+      if (level < 2) {
+        throw new ForbiddenException('You do not have permission to revoke invitations for this project.');
       }
 
       if (invitation.status !== 'active') {
