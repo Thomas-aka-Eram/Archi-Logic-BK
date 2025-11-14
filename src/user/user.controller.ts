@@ -28,7 +28,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   async getProfile(@Request() req) {
-    return this.userService.getProfile(req.user.userId);
+    return this.userService.getProfile(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -48,7 +48,7 @@ export class UserController {
     @Body(new ValidationPipe()) updateUserProfileDto: UpdateUserProfileDto,
   ) {
     return this.userService.updateProfile(
-      req.user.userId,
+      req.user.id,
       updateUserProfileDto,
     );
   }
@@ -56,7 +56,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Get('notifications')
   async getNotificationPreferences(@Request() req) {
-    return this.userService.getNotificationPreferences(req.user.userId);
+    return this.userService.getNotificationPreferences(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -67,7 +67,7 @@ export class UserController {
     updateNotificationPreferencesDto: UpdateNotificationPreferencesDto,
   ) {
     return this.userService.updateNotificationPreferences(
-      req.user.userId,
+      req.user.id,
       updateNotificationPreferencesDto,
     );
   }

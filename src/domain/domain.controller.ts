@@ -18,7 +18,7 @@ export class DomainController {
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() createDomainDto: CreateDomainDto, @Req() req) {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     return this.domainService.create(createDomainDto, userId);
   }
 

@@ -18,7 +18,7 @@ export class TagController {
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() createTagDto: CreateTagDto, @Req() req) {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     return this.tagService.create(createTagDto, userId);
   }
 

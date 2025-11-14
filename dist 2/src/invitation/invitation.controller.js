@@ -24,13 +24,13 @@ let InvitationController = class InvitationController {
         this.invitationService = invitationService;
     }
     async createInvitation(req, createInvitationDto) {
-        return this.invitationService.create(req.user.userId, createInvitationDto);
+        return this.invitationService.create(req.user.id, createInvitationDto);
     }
     async revokeInvitation(req, invitationId) {
-        return this.invitationService.revoke(req.user.userId, invitationId);
+        return this.invitationService.revoke(req.user.id, invitationId);
     }
     async joinByCode(req, joinByCodeDto) {
-        return this.invitationService.joinByCode(req.user.userId, joinByCodeDto.code);
+        return this.invitationService.joinByCode(req.user.id, joinByCodeDto.code);
     }
 };
 exports.InvitationController = InvitationController;

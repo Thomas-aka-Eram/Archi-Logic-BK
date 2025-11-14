@@ -22,20 +22,20 @@ export class InvitationController {
     @Req() req,
     @Body(new ValidationPipe()) createInvitationDto: CreateInvitationDto,
   ) {
-    return this.invitationService.create(req.user.userId, createInvitationDto);
+    return this.invitationService.create(req.user.id, createInvitationDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('/revoke/:id')
   async revokeInvitation(@Req() req, @Param('id') invitationId: string) {
-    return this.invitationService.revoke(req.user.userId, invitationId);
+    return this.invitationService.revoke(req.user.id, invitationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('/join')
   async joinByCode(@Req() req, @Body() joinByCodeDto: JoinByCodeDto) {
     return this.invitationService.joinByCode(
-      req.user.userId,
+      req.user.id,
       joinByCodeDto.code,
     );
   }

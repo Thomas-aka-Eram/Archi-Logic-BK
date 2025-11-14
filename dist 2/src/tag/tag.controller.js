@@ -23,7 +23,7 @@ let TagController = class TagController {
         this.tagService = tagService;
     }
     create(createTagDto, req) {
-        const userId = req.user.userId;
+        const userId = req.user.id;
         return this.tagService.create(createTagDto, userId);
     }
     findAll(projectId) {

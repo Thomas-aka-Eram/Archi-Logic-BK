@@ -41,7 +41,7 @@ let TaskController = class TaskController {
         return this.taskService.getTaskById(taskId);
     }
     async updateTask(taskId, updateTaskDto, req) {
-        const userId = req.user.userId;
+        const userId = req.user.id;
         return this.taskService.updateTask(taskId, updateTaskDto, userId);
     }
     async assignMultipleUsers(taskId, assignUsersDto) {

@@ -88,7 +88,7 @@ export class TaskController {
     @Request() req,
   ) {
     console.log('Received updateTask DTO:', updateTaskDto);
-    const userId = req.user.id; // Changed from req.user.userId to req.user.id
+    const userId = req.user.id; // Changed from req.user.id to req.user.id
     return this.taskService.updateTask(taskId, updateTaskDto, userId);
   }
 

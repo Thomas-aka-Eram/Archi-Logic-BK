@@ -30,14 +30,14 @@ let ProjectController = class ProjectController {
     }
     async createDocument(req, projectId, createDocumentDto) {
         console.log('createDocument called');
-        return this.documentService.createDocument(projectId, createDocumentDto, req.user.userId);
+        return this.documentService.createDocument(projectId, createDocumentDto, req.user.id);
     }
     async getDocumentsForProject(projectId, phaseKey) {
         return this.documentService.getDocumentsForProject(projectId, phaseKey);
     }
     async getProjects(req) {
         console.log('GET /api/projects received');
-        const userId = req.user.userId;
+        const userId = req.user.id;
         console.log('Authenticated userId for getProjects:', userId);
         const projects = await this.projectService.getProjectsForUser(userId);
         console.log('Returning projects for user:', projects);
@@ -46,7 +46,7 @@ let ProjectController = class ProjectController {
     async createProject(createProjectDto, req) {
         console.log('POST /api/projects received');
         console.log('Request body:', createProjectDto);
-        const userId = req.user.userId;
+        const userId = req.user.id;
         console.log('Authenticated userId:', userId);
         return this.projectService.createProject(createProjectDto, userId);
     }
@@ -57,7 +57,7 @@ let ProjectController = class ProjectController {
         return this.projectService.addProjectMember(projectId, addProjectMemberDto);
     }
     async updateMemberRole(req, projectId, targetUserId, updateMemberRoleDto) {
-        return this.projectService.updateMemberRole(req.user.userId, projectId, targetUserId, updateMemberRoleDto.role);
+        return this.projectService.updateMemberRole(req.user.id, projectId, targetUserId, updateMemberRoleDto.role);
     }
     async getProjectPhases(projectId) {
         return this.projectService.getProjectPhases(projectId);

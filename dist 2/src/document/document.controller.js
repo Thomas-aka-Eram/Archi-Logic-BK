@@ -39,10 +39,10 @@ let DocumentController = class DocumentController {
         return this.documentService.getDocumentBlocks(docId, currentOnly === 'true');
     }
     async addBlock(docId, addBlockDto, req) {
-        return this.documentService.addBlock(docId, addBlockDto, req.user.userId);
+        return this.documentService.addBlock(docId, addBlockDto, req.user.id);
     }
     async updateBlock(blockGroupId, updateBlockDto, req) {
-        return this.documentService.updateBlock(blockGroupId, updateBlockDto, req.user.userId);
+        return this.documentService.updateBlock(blockGroupId, updateBlockDto, req.user.id);
     }
     async assignTagsToBlock(blockGroupId, assignTagsDto) {
         return this.documentService.assignTagsToBlock(blockGroupId, assignTagsDto.tagIds);

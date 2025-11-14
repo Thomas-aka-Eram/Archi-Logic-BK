@@ -23,7 +23,7 @@ let DomainController = class DomainController {
         this.domainService = domainService;
     }
     create(createDomainDto, req) {
-        const userId = req.user.userId;
+        const userId = req.user.id;
         return this.domainService.create(createDomainDto, userId);
     }
     findAll(projectId) {
